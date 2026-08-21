@@ -15,7 +15,6 @@ import {
   CheckCircle2,
   ShieldCheck,
   Siren,
-  Wifi,
   WifiOff,
   Volume2,
   VolumeX,
@@ -117,7 +116,7 @@ function SosContent() {
   const [bystanderPhone, setBystanderPhone] = useState('');
 
   const [showCpr, setShowCpr] = useState(false);
-  const [isOnline, setIsOnline] = useState(true);
+  const [isOnline, setIsOnline] = useState<boolean | null>(null);
 
   useEffect(() => {
     const updateConnectionStatus = () => setIsOnline(navigator.onLine);
@@ -243,7 +242,7 @@ function SosContent() {
       </header>
 
       <main className="px-4 py-4 space-y-4 max-w-lg mx-auto">
-        {!isOnline && (
+        {isOnline === false && (
           <section className="bg-amber-950 border border-amber-800 rounded-2xl p-4 flex items-start gap-3">
             <WifiOff className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
             <div>
@@ -255,7 +254,7 @@ function SosContent() {
           </section>
         )}
 
-        {isOnline && (
+        {isOnline === true && (
           <>
             {/* Location Card */}
             <section className="bg-neutral-900 border border-neutral-800 rounded-2xl p-4">
@@ -344,7 +343,7 @@ function SosContent() {
         )}
 
         {/* Offline-safe direct actions */}
-        <ZeroInternetFallback smsBody={smsBody} isOffline={!isOnline} />
+        {isOnline === false && <ZeroInternetFallback smsBody={smsBody} />}
       </main>
     </div>
   );
@@ -466,12 +465,12 @@ function FirstAidGuidance({ type }: { type: EmergencyType }) {
 // ============================================================
 // Zero-Internet Fallback Card
 // ============================================================
-function ZeroInternetFallback({ smsBody, isOffline }: { smsBody: string; isOffline: boolean }) {
+function ZeroInternetFallback({ smsBody }: { smsBody: string }) {
   return (
     <section className="bg-neutral-900 border-2 border-dashed border-neutral-700 rounded-2xl p-4">
       <h2 className="text-sm font-bold text-neutral-300 mb-1 flex items-center gap-2">
-        {isOffline ? <WifiOff className="w-4 h-4 text-amber-400" /> : <Wifi className="w-4 h-4 text-emerald-400" />}
-        {isOffline ? 'CONNECTION LOST — USE THESE DIRECTLY' : 'EMERGENCY CALL & SMS'}
+        <WifiOff className="w-4 h-4 text-amber-400" />
+        CONNECTION LOST — USE THESE DIRECTLY
       </h2>
       <p className="text-xs text-neutral-500 mb-3">
         These use your mobile network directly and do not require this page to reach the dispatch server.
