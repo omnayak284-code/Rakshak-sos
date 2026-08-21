@@ -120,6 +120,8 @@ interface DispatchResponse {
   victimCount: VictimCount;
   nearestHospital: DispatchedUnit;
   nearestPolice: DispatchedUnit;
+  nearestFire?: DispatchedUnit;
+  nearestTraffic?: DispatchedUnit;
   timestamp: string;
 }
 
@@ -384,11 +386,16 @@ function SosContent() {
   const smsLocation = coords
     ? `https://maps.google.com/?q=${coords.lat},${coords.lng}`
     : 'Location unavailable';
+  const offlineSpecialNote = selectedEmergency === 'trapped_vehicle'
+    ? ' ALERT FIRE BRIGADE: Hydraulic cutters required for trapped victims.'
+    : selectedEmergency === 'vehicle_fire'
+      ? ' ALERT FIRE & TRAFFIC: Active vehicle fire or hazard; secure the perimeter and divert traffic.'
+      : '';
   const smsMessage = language === 'or'
-    ? `ରକ୍ଷକ SOS: ରାଜପଥ KM ${kmId} ରେ ଜରୁରୀକାଳୀନ ସହାୟତା ଆବଶ୍ୟକ। ସ୍ଥାନ: ${smsLocation}। ପ୍ରକାର: ${emergencyLabel}। ଆନୁମାନିକ ଆହତ: ${victimLabel}। ତୁରନ୍ତ ସହାୟତା ପଠାନ୍ତୁ।`
+    ? `ରକ୍ଷକ SOS: ରାଜପଥ KM ${kmId} ରେ ଜରୁରୀକାଳୀନ ସହାୟତା ଆବଶ୍ୟକ। ସ୍ଥାନ: ${smsLocation}। ପ୍ରକାର: ${emergencyLabel}। ଆନୁମାନିକ ଆହତ: ${victimLabel}।${offlineSpecialNote} ତୁରନ୍ତ ସହାୟତା ପଠାନ୍ତୁ।`
     : language === 'hi'
-      ? `रक्षक SOS: राजमार्ग KM ${kmId} पर आपातकालीन सहायता चाहिए। स्थान: ${smsLocation}। प्रकार: ${emergencyLabel}। अनुमानित घायल: ${victimLabel}। तुरंत मदद भेजें।`
-      : `RAKSHAK SOS: Emergency at Highway KM ${kmId}. Location: ${smsLocation}. Type: ${emergencyLabel}. Estimated Victims: ${victimLabel}. Please send help immediately.`;
+      ? `रक्षक SOS: राजमार्ग KM ${kmId} पर आपातकालीन सहायता चाहिए। स्थान: ${smsLocation}। प्रकार: ${emergencyLabel}। अनुमानित घायल: ${victimLabel}।${offlineSpecialNote} तुरंत मदद भेजें।`
+      : `RAKSHAK SOS: Emergency at Highway KM ${kmId}. Location: ${smsLocation}. Type: ${emergencyLabel}. Estimated Victims: ${victimLabel}.${offlineSpecialNote} Please send help immediately.`;
   const smsBody = encodeURIComponent(
     smsMessage
   );
@@ -680,6 +687,30 @@ function PostDispatchConfirmation({
               <p className="text-emerald-100 text-xs mt-1 font-medium">{result.nearestHospital.distanceKm} km away</p>
             </div>
           </div>
+          {result.nearestFire && (
+            <div className="flex items-start gap-3 bg-amber-700/30 rounded-xl p-3">
+              <span className="text-xl" aria-hidden="true">🚒</span>
+              <div className="text-sm text-amber-50 leading-snug">
+                <p className="font-semibold">Fire &amp; Rescue: {result.nearestFire.name}</p>
+                <p className="text-amber-100/80 text-xs mt-0.5">{result.nearestFire.address}</p>
+                <p className="text-amber-100 text-xs mt-1 font-medium">
+                  {result.nearestFire.distanceKm} km away — Fire brigade notified
+                </p>
+              </div>
+            </div>
+          )}
+          {result.nearestTraffic && (
+            <div className="flex items-start gap-3 bg-sky-700/30 rounded-xl p-3">
+              <span className="text-xl" aria-hidden="true">🚧</span>
+              <div className="text-sm text-sky-50 leading-snug">
+                <p className="font-semibold">Traffic Control: {result.nearestTraffic.name}</p>
+                <p className="text-sky-100/80 text-xs mt-0.5">{result.nearestTraffic.address}</p>
+                <p className="text-sky-100 text-xs mt-1 font-medium">
+                  {result.nearestTraffic.distanceKm} km away — Perimeter and diversion notified
+                </p>
+              </div>
+            </div>
+          )}
         </div>
         {isMockMode && (
           <p className="text-xs text-emerald-100/80 mt-3 border-t border-emerald-500/40 pt-2">

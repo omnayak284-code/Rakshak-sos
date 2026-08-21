@@ -15,7 +15,7 @@ interface EmergencyUnit {
   id: string;
   name: string;
   address: string;
-  type: 'hospital' | 'police' | 'fire' | 'ambulance';
+  type: 'hospital' | 'police' | 'fire' | 'traffic' | 'ambulance';
   lat: number;
   lng: number;
   phone: string;
@@ -40,6 +40,8 @@ interface DispatchResult {
   victimCount: AlertPayload['victimCount'];
   nearestHospital: DispatchedUnit;
   nearestPolice: DispatchedUnit;
+  nearestFire?: DispatchedUnit;
+  nearestTraffic?: DispatchedUnit;
   timestamp: string;
 }
 
@@ -52,6 +54,8 @@ const EMERGENCY_UNITS: EmergencyUnit[] = [
   { id: 'POLICE-001', name: 'Police Commissionerate Office, Bhubaneswar', address: 'Bhubaneswar, Odisha', type: 'police', lat: 20.274694, lng: 85.825917, phone: '+916742530035' },
   { id: 'POLICE-002', name: 'Special Crime Unit Police Station, Nayapalli', address: 'Nayapalli, Bhubaneswar', type: 'police', lat: 20.290579, lng: 85.815449, phone: '+916742556668' },
   { id: 'POLICE-003', name: 'Infocity Police Station', address: 'Infocity, Bhubaneswar', type: 'police', lat: 20.3546, lng: 85.8091, phone: '+916742725700' },
+  { id: 'FIRE-001', name: 'District Fire & Rescue Brigade', address: 'Fire Station Road, Bhubaneswar', type: 'fire', lat: 20.301, lng: 85.82, phone: '+917777777777' },
+  { id: 'TRAFFIC-001', name: 'Highway Traffic Control Command', address: 'Highway Control Center, Bhubaneswar', type: 'traffic', lat: 20.285, lng: 85.835, phone: '+916666666666' },
 ];
 
 // ---------- Haversine distance ----------
@@ -213,8 +217,11 @@ export async function POST(request: NextRequest) {
 
     const nearestHospitalMatch = findNearestByType(lat, lng, 'hospital');
     const nearestPoliceMatch = findNearestByType(lat, lng, 'police');
+    const needsSpecialResponse = emergencyType === 'trapped_vehicle' || emergencyType === 'vehicle_fire';
+    const nearestFireMatch = needsSpecialResponse ? findNearestByType(lat, lng, 'fire') : undefined;
+    const nearestTrafficMatch = needsSpecialResponse ? findNearestByType(lat, lng, 'traffic') : undefined;
 
-    if (!nearestHospitalMatch || !nearestPoliceMatch) {
+    if (!nearestHospitalMatch || !nearestPoliceMatch || (needsSpecialResponse && (!nearestFireMatch || !nearestTrafficMatch))) {
       return NextResponse.json({ success: false, error: 'No emergency units available in dataset' }, { status: 500 });
     }
 
@@ -227,13 +234,28 @@ export async function POST(request: NextRequest) {
 
     const hospitalMessage = `RAKSHAK SOS ALERT [${alertId}]. Type: ${emergencyLabel}. Estimated Victims: ${victimCount}. Highway KM ${km_id}. Location: ${locationLink}. Distance: ${nearestHospitalMatch.distanceKm.toFixed(2)} km. ETA ${hospitalEta} min. Respond immediately.`;
     const policeMessage = `RAKSHAK SOS ALERT [${alertId}]. Type: ${emergencyLabel}. Estimated Victims: ${victimCount}. Highway KM ${km_id}. Location: ${locationLink}. Distance: ${nearestPoliceMatch.distanceKm.toFixed(2)} km. ETA ${policeEta} min. Respond immediately.`;
+    const specialMessage = emergencyType === 'trapped_vehicle'
+      ? `${hospitalMessage} CRITICAL: Victims may be trapped inside the vehicle. Send hydraulic cutters and extrication rescue.`
+      : `${hospitalMessage} CRITICAL: Active vehicle fire or hazard. Send fire tenders and secure the perimeter with traffic diversion.`;
 
-    const [hospCall, hospSms, polCall, polSms] = await Promise.all([
+    const dispatchPromises = [
       dispatchCall(nearestHospitalMatch.unit.phone, hospitalMessage),
       dispatchSms(nearestHospitalMatch.unit.phone, hospitalMessage),
       dispatchCall(nearestPoliceMatch.unit.phone, policeMessage),
       dispatchSms(nearestPoliceMatch.unit.phone, policeMessage),
-    ]);
+    ];
+    if (needsSpecialResponse && nearestFireMatch && nearestTrafficMatch) {
+      const fireMessage = specialMessage.replace(hospitalMessage, `${hospitalMessage} Fire & Rescue notification.`);
+      const trafficMessage = `${policeMessage} Traffic Control notification: secure the perimeter and divert highway traffic.`;
+      dispatchPromises.push(
+        dispatchCall(nearestFireMatch.unit.phone, fireMessage),
+        dispatchSms(nearestFireMatch.unit.phone, fireMessage),
+        dispatchCall(nearestTrafficMatch.unit.phone, trafficMessage),
+        dispatchSms(nearestTrafficMatch.unit.phone, trafficMessage),
+      );
+    }
+    const dispatchResults = await Promise.all(dispatchPromises);
+    const [hospCall, hospSms, polCall, polSms, fireCall, fireSms, trafficCall, trafficSms] = dispatchResults;
 
     if (bystanderPhone) {
       const bystanderMessage = `Rakshak SOS: Alert ${alertId} dispatched for ${victimCount}. Hospital: ${nearestHospitalMatch.unit.name} (${hospitalEta} min). Police: ${nearestPoliceMatch.unit.name} (${policeEta} min). Dial 112 if situation worsens.`;
@@ -266,6 +288,30 @@ export async function POST(request: NextRequest) {
         call: polCall,
         sms: polSms,
       },
+      ...(needsSpecialResponse && nearestFireMatch && nearestTrafficMatch
+        ? {
+            nearestFire: {
+              id: nearestFireMatch.unit.id,
+              name: nearestFireMatch.unit.name,
+              address: nearestFireMatch.unit.address,
+              type: nearestFireMatch.unit.type,
+              distanceKm: Math.round(nearestFireMatch.distanceKm * 100) / 100,
+              etaMinutes: estimateEtaMinutes(nearestFireMatch.distanceKm),
+              call: fireCall,
+              sms: fireSms,
+            },
+            nearestTraffic: {
+              id: nearestTrafficMatch.unit.id,
+              name: nearestTrafficMatch.unit.name,
+              address: nearestTrafficMatch.unit.address,
+              type: nearestTrafficMatch.unit.type,
+              distanceKm: Math.round(nearestTrafficMatch.distanceKm * 100) / 100,
+              etaMinutes: estimateEtaMinutes(nearestTrafficMatch.distanceKm),
+              call: trafficCall,
+              sms: trafficSms,
+            },
+          }
+        : {}),
       timestamp: new Date().toISOString(),
     };
 
