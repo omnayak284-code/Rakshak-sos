@@ -34,7 +34,9 @@ type Language = 'en' | 'or' | 'hi';
 const TRANSLATIONS = {
   en: {
     title: 'Rakshak SOS', subtitle: 'Highway Emergency Response', chooseLanguage: 'Choose your language',
-    languageHint: 'Select a language to continue', marker: 'Highway Marker', gps: 'Acquiring GPS location...',
+    languageHint: 'Select a language to continue', marker: 'Highway Marker / Exact GPS', gps: 'Acquiring exact GPS coordinates...',
+    gpsRequiredTitle: 'GPS Location Access Required', gpsRequiredDesc: 'Turn on Location and allow GPS access so we can send your exact coordinates to the nearest emergency units.',
+    enableGps: 'Enable High-Accuracy GPS', gpsLocked: 'Exact live GPS locked', gpsDenied: 'Location access is off or was denied.',
     selectEmergency: 'SELECT EMERGENCY TYPE — 1 TAP TO DISPATCH', victims: 'Estimated Victims / People Injured',
     one: '1 Person', twoThree: '2–3 People', mass: '4+ (Mass Casualty)', autoDispatching: 'Auto-dispatching',
     changeCategory: 'Tap another category to change', transmitting: 'Transmitting', beep: 'A beep sounds every second.',
@@ -55,7 +57,9 @@ const TRANSLATIONS = {
   },
   or: {
     title: 'ରକ୍ଷକ SOS', subtitle: 'ରାଜପଥ ଜରୁରୀକାଳୀନ ସହାୟତା', chooseLanguage: 'ଆପଣଙ୍କର ଭାଷା ବାଛନ୍ତୁ',
-    languageHint: 'ଆଗକୁ ବଢ଼ିବା ପାଇଁ ଭାଷା ବାଛନ୍ତୁ', marker: 'ରାଜପଥ ଚିହ୍ନ', gps: 'GPS ସ୍ଥାନ ଖୋଜାଯାଉଛି...',
+    languageHint: 'ଆଗକୁ ବଢ଼ିବା ପାଇଁ ଭାଷା ବାଛନ୍ତୁ', marker: 'ରାଜପଥ ଚିହ୍ନ / ସଠିକ୍ GPS', gps: 'ସଠିକ୍ GPS ସ୍ଥାନ ଖୋଜାଯାଉଛି...',
+    gpsRequiredTitle: 'GPS ସ୍ଥାନ ଅନୁମତି ଆବଶ୍ୟକ', gpsRequiredDesc: 'ଆପଣଙ୍କ ସଠିକ୍ ସ୍ଥାନ ନିକଟସ୍ଥ ଜରୁରୀକାଳୀନ ୟୁନିଟ୍‌କୁ ପଠାଇବା ପାଇଁ Location ଅନ୍ କରନ୍ତୁ ଏବଂ GPS ଅନୁମତି ଦିଅନ୍ତୁ।',
+    enableGps: 'ସଠିକ୍ GPS ଅନ୍ କରନ୍ତୁ', gpsLocked: 'ସଠିକ୍ Live GPS ଲକ୍ ହୋଇଛି', gpsDenied: 'Location ବନ୍ଦ ଅଛି କିମ୍ବା ଅନୁମତି ଦିଆଯାଇନାହିଁ।',
     selectEmergency: 'ଜରୁରୀକାଳୀନ ପ୍ରକାର ବାଛନ୍ତୁ — ୧ ଟ୍ୟାପ୍', victims: 'ଆହତଙ୍କ ଆନୁମାନିକ ସଂଖ୍ୟା',
     one: '୧ ଜଣ', twoThree: '୨–୩ ଜଣ', mass: '୪+ (ଅନେକ ଆହତ)', autoDispatching: 'ସ୍ୱୟଂଚାଳିତ ପଠାଯାଉଛି',
     changeCategory: 'ପରିବର୍ତ୍ତନ ପାଇଁ ଅନ୍ୟ ପ୍ରକାର ବାଛନ୍ତୁ', transmitting: 'ପଠାଯାଉଛି', beep: 'ପ୍ରତି ସେକେଣ୍ଡରେ ଧ୍ୱନି ହେବ।',
@@ -75,7 +79,9 @@ const TRANSLATIONS = {
   },
   hi: {
     title: 'रक्षक SOS', subtitle: 'राजमार्ग आपातकालीन सहायता', chooseLanguage: 'अपनी भाषा चुनें',
-    languageHint: 'आगे बढ़ने के लिए भाषा चुनें', marker: 'राजमार्ग स्थान', gps: 'GPS स्थान खोजा जा रहा है...',
+    languageHint: 'आगे बढ़ने के लिए भाषा चुनें', marker: 'राजमार्ग स्थान / सटीक GPS', gps: 'सटीक GPS स्थान खोजा जा रहा है...',
+    gpsRequiredTitle: 'GPS लोकेशन की अनुमति जरूरी है', gpsRequiredDesc: 'आपके सटीक निर्देशांक नजदीकी आपातकालीन इकाइयों को भेजने के लिए Location चालू करें और GPS की अनुमति दें।',
+    enableGps: 'सटीक GPS चालू करें', gpsLocked: 'सटीक Live GPS लॉक हो गया', gpsDenied: 'Location बंद है या अनुमति नहीं दी गई।',
     selectEmergency: 'आपातकाल का प्रकार चुनें — 1 टैप', victims: 'घायलों की अनुमानित संख्या',
     one: '1 व्यक्ति', twoThree: '2–3 लोग', mass: '4+ (बहुत से घायल)', autoDispatching: 'मदद अपने आप भेजी जा रही है',
     changeCategory: 'बदलने के लिए दूसरा प्रकार चुनें', transmitting: 'भेजा जा रहा है', beep: 'हर सेकंड ध्वनि होगी।',
@@ -217,24 +223,12 @@ function SosContent() {
     };
   }, []);
 
-  // ---------- Read QR params, fallback to GPS ----------
+  // ---------- QR identifies the marker; device GPS identifies the person ----------
   useEffect(() => {
     const km_id = searchParams.get('km_id');
-    const lat = searchParams.get('lat');
-    const lng = searchParams.get('lng');
+    if (km_id) setKmId(km_id);
 
-    if (km_id && lat && lng) {
-      const latNum = parseFloat(lat);
-      const lngNum = parseFloat(lng);
-      if (!Number.isNaN(latNum) && !Number.isNaN(lngNum)) {
-        setKmId(km_id);
-        setCoords({ lat: latNum, lng: lngNum, source: 'qr' });
-        setLocationLoading(false);
-        return;
-      }
-    }
-
-    // Fallback to GPS
+    setLocationLoading(true);
     if (typeof window !== 'undefined' && 'geolocation' in navigator) {
       navigator.geolocation.getCurrentPosition(
         (position) => {
@@ -244,11 +238,12 @@ function SosContent() {
             source: 'gps',
           });
           setKmId(km_id || 'GPS-DETECTED');
+          setLocationError(null);
           setLocationLoading(false);
         },
         (error) => {
           console.error('GPS error:', error);
-          setLocationError('Unable to access GPS. Please enable location services or share your position manually.');
+          setLocationError('Location access is off or was denied.');
           setLocationLoading(false);
         },
         { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
@@ -258,6 +253,35 @@ function SosContent() {
       setLocationLoading(false);
     }
   }, [searchParams]);
+
+  const requestLocation = useCallback(() => {
+    setLocationLoading(true);
+    setLocationError(null);
+
+    if (!('geolocation' in navigator)) {
+      setLocationError('Location services are not supported on this device.');
+      setLocationLoading(false);
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setCoords({
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+          source: 'gps',
+        });
+        setLocationError(null);
+        setLocationLoading(false);
+      },
+      (error) => {
+        console.error('GPS retry error:', error);
+        setLocationError('Location access is off or was denied.');
+        setLocationLoading(false);
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+  }, []);
 
   // ---------- Dispatch alert ----------
   const handleDispatch = useCallback(
@@ -353,6 +377,10 @@ function SosContent() {
   }, []);
 
   const handleEmergencySelect = (type: EmergencyType) => {
+    if (!coords) {
+      setLocationError('Location access is off or was denied.');
+      return;
+    }
     setSelectedEmergency(type);
     setVictimCount((current) => current || '1 Person');
     setDispatchError(null);
@@ -432,6 +460,23 @@ function SosContent() {
           </section>
         </div>
       )}
+      {!locationLoading && !coords && locationError && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/90 px-4" role="alertdialog" aria-modal="true">
+          <section className="w-full max-w-sm bg-neutral-900 border-2 border-amber-600 rounded-2xl p-6 text-center shadow-2xl">
+            <Navigation className="w-10 h-10 mx-auto mb-4 text-amber-400 animate-pulse" />
+            <h2 className="text-xl font-bold text-white">{t.gpsRequiredTitle}</h2>
+            <p className="text-sm text-neutral-300 mt-3 leading-relaxed">{t.gpsRequiredDesc}</p>
+            <p className="text-xs text-amber-300 mt-3">{t.gpsDenied}</p>
+            <button
+              type="button"
+              onClick={requestLocation}
+              className="w-full mt-5 rounded-xl bg-red-600 hover:bg-red-500 p-4 text-white font-bold"
+            >
+              {t.enableGps}
+            </button>
+          </section>
+        </div>
+      )}
       {/* Header */}
       <header className="sticky top-0 z-30 bg-neutral-950/95 backdrop-blur border-b border-neutral-800 px-4 py-3 flex items-center gap-2">
         <Siren className="w-6 h-6 text-red-500 flex-shrink-0" />
@@ -469,7 +514,7 @@ function SosContent() {
           </section>
         )}
 
-        {isOnline === true && (
+        {isOnline === true && coords && (
           <>
             {/* Location Card */}
             <section className="bg-neutral-900 border border-neutral-800 rounded-2xl p-4">
@@ -493,7 +538,7 @@ function SosContent() {
                       </p>
                       <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-400 border border-emerald-800">
                         <Navigation className="w-3 h-3" />
-                        {coords.source === 'qr' ? 'From QR Code' : 'Live GPS'}
+                        {t.gpsLocked}
                       </span>
                     </div>
                   )}
@@ -630,7 +675,7 @@ function SosContent() {
         )}
 
         {/* Offline-safe direct actions */}
-        {isOnline === false && <ZeroInternetFallback smsBody={smsBody} language={language} />}
+        {isOnline === false && coords && <ZeroInternetFallback smsBody={smsBody} language={language} />}
       </main>
     </div>
   );
