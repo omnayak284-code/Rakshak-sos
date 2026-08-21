@@ -15,6 +15,8 @@ import {
   CheckCircle2,
   ShieldCheck,
   Siren,
+  Wifi,
+  WifiOff,
   Volume2,
   VolumeX,
   Navigation,
@@ -115,6 +117,20 @@ function SosContent() {
   const [bystanderPhone, setBystanderPhone] = useState('');
 
   const [showCpr, setShowCpr] = useState(false);
+  const [isOnline, setIsOnline] = useState(true);
+
+  useEffect(() => {
+    const updateConnectionStatus = () => setIsOnline(navigator.onLine);
+
+    updateConnectionStatus();
+    window.addEventListener('online', updateConnectionStatus);
+    window.addEventListener('offline', updateConnectionStatus);
+
+    return () => {
+      window.removeEventListener('online', updateConnectionStatus);
+      window.removeEventListener('offline', updateConnectionStatus);
+    };
+  }, []);
 
   // ---------- Read QR params, fallback to GPS ----------
   useEffect(() => {
@@ -227,92 +243,108 @@ function SosContent() {
       </header>
 
       <main className="px-4 py-4 space-y-4 max-w-lg mx-auto">
-        {/* Location Card */}
-        <section className="bg-neutral-900 border border-neutral-800 rounded-2xl p-4">
-          <div className="flex items-start gap-3">
-            <div className="bg-neutral-800 rounded-full p-2 flex-shrink-0">
-              <MapPin className="w-5 h-5 text-emerald-400" />
+        {!isOnline && (
+          <section className="bg-amber-950 border border-amber-800 rounded-2xl p-4 flex items-start gap-3">
+            <WifiOff className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="font-bold text-amber-200">Limited connection</p>
+              <p className="text-sm text-amber-300 mt-1">
+                Dispatch is paused. Use the call or SMS buttons below; they use your mobile network directly.
+              </p>
             </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm text-neutral-400">Highway Marker</p>
-              <p className="text-xl font-bold">KM {kmId}</p>
-              {locationLoading && (
-                <div className="flex items-center gap-2 mt-2 text-sm text-neutral-400">
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Acquiring GPS location...</span>
-                </div>
-              )}
-              {!locationLoading && coords && (
-                <div className="mt-2 space-y-1">
-                  <p className="text-sm text-neutral-300 font-mono">
-                    {coords.lat.toFixed(6)}, {coords.lng.toFixed(6)}
-                  </p>
-                  <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-400 border border-emerald-800">
-                    <Navigation className="w-3 h-3" />
-                    {coords.source === 'qr' ? 'From QR Code' : 'Live GPS'}
-                  </span>
-                </div>
-              )}
-              {locationError && (
-                <div className="flex items-start gap-2 mt-2 text-sm text-amber-400">
-                  <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                  <span>{locationError}</span>
-                </div>
-              )}
-            </div>
-          </div>
-        </section>
-
-        {/* Emergency Triage Grid */}
-        {!dispatchResult && (
-          <section>
-            <h2 className="text-sm font-semibold text-neutral-400 mb-2 px-1">
-              SELECT EMERGENCY TYPE — 1 TAP TO DISPATCH
-            </h2>
-            <div className="grid grid-cols-2 gap-3">
-              {EMERGENCY_CATEGORIES.map((cat) => {
-                const Icon = cat.icon;
-                const isSelected = selectedEmergency === cat.id;
-                return (
-                  <button
-                    key={cat.id}
-                    onClick={() => handleEmergencySelect(cat.id)}
-                    disabled={dispatching}
-                    className={`${cat.color} rounded-2xl p-3 sm:p-4 flex flex-col items-center justify-center gap-2 min-h-[100px] sm:min-h-[120px] text-white font-bold shadow-lg transition-transform active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed`}
-                  >
-                    {isSelected && dispatching ? (
-                      <Loader2 className="w-8 h-8 animate-spin" />
-                    ) : (
-                      <Icon className="w-8 h-8" strokeWidth={2.5} />
-                    )}
-                    <span className="text-sm text-center leading-tight">{cat.label}</span>
-                  </button>
-                );
-              })}
-            </div>
-
-            {dispatchError && (
-              <div className="mt-3 bg-red-950 border border-red-800 rounded-xl p-3 flex items-start gap-2">
-                <AlertTriangle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
-                <p className="text-sm text-red-300">{dispatchError}</p>
-              </div>
-            )}
           </section>
         )}
 
-        {/* Post-Dispatch Confirmation */}
-        {dispatchResult && (
-          <PostDispatchConfirmation
-            result={dispatchResult}
-            legalPassSms={legalPassSms}
-          />
+        {isOnline && (
+          <>
+            {/* Location Card */}
+            <section className="bg-neutral-900 border border-neutral-800 rounded-2xl p-4">
+              <div className="flex items-start gap-3">
+                <div className="bg-neutral-800 rounded-full p-2 flex-shrink-0">
+                  <MapPin className="w-5 h-5 text-emerald-400" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-neutral-400">Highway Marker</p>
+                  <p className="text-xl font-bold">KM {kmId}</p>
+                  {locationLoading && (
+                    <div className="flex items-center gap-2 mt-2 text-sm text-neutral-400">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Acquiring GPS location...</span>
+                    </div>
+                  )}
+                  {!locationLoading && coords && (
+                    <div className="mt-2 space-y-1">
+                      <p className="text-sm text-neutral-300 font-mono">
+                        {coords.lat.toFixed(6)}, {coords.lng.toFixed(6)}
+                      </p>
+                      <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-400 border border-emerald-800">
+                        <Navigation className="w-3 h-3" />
+                        {coords.source === 'qr' ? 'From QR Code' : 'Live GPS'}
+                      </span>
+                    </div>
+                  )}
+                  {locationError && (
+                    <div className="flex items-start gap-2 mt-2 text-sm text-amber-400">
+                      <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                      <span>{locationError}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </section>
+
+            {/* Emergency Triage Grid */}
+            {!dispatchResult && (
+              <section>
+                <h2 className="text-sm font-semibold text-neutral-400 mb-2 px-1">
+                  SELECT EMERGENCY TYPE — 1 TAP TO DISPATCH
+                </h2>
+                <div className="grid grid-cols-2 gap-3">
+                  {EMERGENCY_CATEGORIES.map((cat) => {
+                    const Icon = cat.icon;
+                    const isSelected = selectedEmergency === cat.id;
+                    return (
+                      <button
+                        key={cat.id}
+                        onClick={() => handleEmergencySelect(cat.id)}
+                        disabled={dispatching}
+                        className={`${cat.color} rounded-2xl p-3 sm:p-4 flex flex-col items-center justify-center gap-2 min-h-[100px] sm:min-h-[120px] text-white font-bold shadow-lg transition-transform active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed`}
+                      >
+                        {isSelected && dispatching ? (
+                          <Loader2 className="w-8 h-8 animate-spin" />
+                        ) : (
+                          <Icon className="w-8 h-8" strokeWidth={2.5} />
+                        )}
+                        <span className="text-sm text-center leading-tight">{cat.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {dispatchError && (
+                  <div className="mt-3 bg-red-950 border border-red-800 rounded-xl p-3 flex items-start gap-2">
+                    <AlertTriangle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
+                    <p className="text-sm text-red-300">{dispatchError}</p>
+                  </div>
+                )}
+              </section>
+            )}
+
+            {/* Post-Dispatch Confirmation */}
+            {dispatchResult && (
+              <PostDispatchConfirmation
+                result={dispatchResult}
+                legalPassSms={legalPassSms}
+              />
+            )}
+
+            {/* CPR Metronome */}
+            {showCpr && <CprMetronome onClose={() => setShowCpr(false)} />}
+          </>
         )}
 
-        {/* CPR Metronome */}
-        {showCpr && <CprMetronome onClose={() => setShowCpr(false)} />}
-
-        {/* Zero-Internet Fallback */}
-        <ZeroInternetFallback smsBody={smsBody} />
+        {/* Offline-safe direct actions */}
+        <ZeroInternetFallback smsBody={smsBody} isOffline={!isOnline} />
       </main>
     </div>
   );
@@ -434,15 +466,15 @@ function FirstAidGuidance({ type }: { type: EmergencyType }) {
 // ============================================================
 // Zero-Internet Fallback Card
 // ============================================================
-function ZeroInternetFallback({ smsBody }: { smsBody: string }) {
+function ZeroInternetFallback({ smsBody, isOffline }: { smsBody: string; isOffline: boolean }) {
   return (
     <section className="bg-neutral-900 border-2 border-dashed border-neutral-700 rounded-2xl p-4">
       <h2 className="text-sm font-bold text-neutral-300 mb-1 flex items-center gap-2">
-        <AlertTriangle className="w-4 h-4 text-amber-400" />
-        NO INTERNET? USE THESE DIRECTLY
+        {isOffline ? <WifiOff className="w-4 h-4 text-amber-400" /> : <Wifi className="w-4 h-4 text-emerald-400" />}
+        {isOffline ? 'CONNECTION LOST — USE THESE DIRECTLY' : 'EMERGENCY CALL & SMS'}
       </h2>
       <p className="text-xs text-neutral-500 mb-3">
-        These work without mobile data — direct call and SMS to national emergency dispatch.
+        These use your mobile network directly and do not require this page to reach the dispatch server.
       </p>
       <div className="grid grid-cols-2 gap-3">
         <a
