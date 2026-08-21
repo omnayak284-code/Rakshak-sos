@@ -305,21 +305,11 @@ function SosContent() {
           <PostDispatchConfirmation
             result={dispatchResult}
             legalPassSms={legalPassSms}
-            onShowCpr={() => setShowCpr(true)}
           />
         )}
 
         {/* CPR Metronome */}
         {showCpr && <CprMetronome onClose={() => setShowCpr(false)} />}
-        {!showCpr && !dispatchResult && (
-          <button
-            onClick={() => setShowCpr(true)}
-            className="w-full bg-neutral-900 border border-neutral-800 rounded-2xl p-4 flex items-center justify-center gap-2 text-neutral-200 font-semibold hover:bg-neutral-800 transition-colors"
-          >
-            <Siren className="w-5 h-5 text-red-400" />
-            Open CPR Metronome (110 BPM)
-          </button>
-        )}
 
         {/* Zero-Internet Fallback */}
         <ZeroInternetFallback smsBody={smsBody} />
@@ -334,11 +324,9 @@ function SosContent() {
 function PostDispatchConfirmation({
   result,
   legalPassSms,
-  onShowCpr,
 }: {
   result: DispatchResponse;
   legalPassSms: string;
-  onShowCpr: () => void;
 }) {
   const isMockMode =
     result.nearestHospital.call.mode === 'mock' || result.nearestPolice.call.mode === 'mock';
@@ -414,13 +402,6 @@ function PostDispatchConfirmation({
         </div>
       </div>
 
-      <button
-        onClick={onShowCpr}
-        className="w-full bg-red-900 border border-red-700 rounded-2xl p-4 flex items-center justify-center gap-2 text-red-200 font-bold hover:bg-red-800 transition-colors"
-      >
-        <Siren className="w-5 h-5" />
-        Start CPR Metronome While Waiting
-      </button>
     </section>
   );
 }
