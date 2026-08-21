@@ -1,5 +1,6 @@
 // app/api/alert/route.ts
 import { NextRequest, NextResponse } from 'next/server';
+import { EmergencyFacility, fetchNearestFacilities } from '@/lib/emergencyService';
 
 // ---------- Types ----------
 interface AlertPayload {
@@ -18,7 +19,7 @@ interface EmergencyUnit {
   type: 'hospital' | 'police' | 'fire' | 'traffic' | 'ambulance';
   lat: number;
   lng: number;
-  phone: string;
+  phone?: string;
 }
 
 interface DispatchedUnit {
@@ -88,13 +89,28 @@ function findNearestByType(lat: number, lng: number, type: EmergencyUnit['type']
   return candidates[0];
 }
 
+function facilityToMatch(facility: EmergencyFacility): { unit: EmergencyUnit; distanceKm: number } {
+  return {
+    unit: {
+      id: `OSM-${facility.type}-${facility.lat}-${facility.lng}`,
+      name: facility.name,
+      address: facility.address,
+      type: facility.type === 'fire_station' ? 'fire' : facility.type,
+      lat: facility.lat,
+      lng: facility.lng,
+      phone: facility.phone,
+    },
+    distanceKm: facility.distanceKm,
+  };
+}
+
 // ---------- Twilio dispatch (mock-safe) ----------
-async function dispatchCall(phone: string, message: string): Promise<{ status: string; sid?: string; mode: 'live' | 'mock' }> {
+async function dispatchCall(phone: string | undefined, message: string): Promise<{ status: string; sid?: string; mode: 'live' | 'mock' }> {
   const accountSid = process.env.TWILIO_ACCOUNT_SID;
   const authToken = process.env.TWILIO_AUTH_TOKEN;
   const fromNumber = process.env.TWILIO_FROM_NUMBER;
 
-  if (!accountSid || !authToken || !fromNumber) {
+  if (!phone || !accountSid || !authToken || !fromNumber) {
     console.log(`[MOCK CALL] To: ${phone} | Message: ${message}`);
     return { status: 'simulated', mode: 'mock' };
   }
@@ -128,12 +144,12 @@ async function dispatchCall(phone: string, message: string): Promise<{ status: s
   }
 }
 
-async function dispatchSms(phone: string, message: string): Promise<{ status: string; sid?: string; mode: 'live' | 'mock' }> {
+async function dispatchSms(phone: string | undefined, message: string): Promise<{ status: string; sid?: string; mode: 'live' | 'mock' }> {
   const accountSid = process.env.TWILIO_ACCOUNT_SID;
   const authToken = process.env.TWILIO_AUTH_TOKEN;
   const fromNumber = process.env.TWILIO_FROM_NUMBER;
 
-  if (!accountSid || !authToken || !fromNumber) {
+  if (!phone || !accountSid || !authToken || !fromNumber) {
     console.log(`[MOCK SMS] To: ${phone} | Message: ${message}`);
     return { status: 'simulated', mode: 'mock' };
   }
@@ -215,11 +231,25 @@ export async function POST(request: NextRequest) {
 
     const { km_id, lat, lng, emergencyType, victimCount, bystanderPhone } = validation.payload;
 
-    const nearestHospitalMatch = findNearestByType(lat, lng, 'hospital');
-    const nearestPoliceMatch = findNearestByType(lat, lng, 'police');
+    let nearestHospitalMatch = findNearestByType(lat, lng, 'hospital');
+    let nearestPoliceMatch = findNearestByType(lat, lng, 'police');
     const needsSpecialResponse = emergencyType === 'trapped_vehicle' || emergencyType === 'vehicle_fire';
-    const nearestFireMatch = needsSpecialResponse ? findNearestByType(lat, lng, 'fire') : undefined;
-    const nearestTrafficMatch = needsSpecialResponse ? findNearestByType(lat, lng, 'traffic') : undefined;
+    let nearestFireMatch = needsSpecialResponse ? findNearestByType(lat, lng, 'fire') : undefined;
+    let nearestTrafficMatch = needsSpecialResponse ? findNearestByType(lat, lng, 'traffic') : undefined;
+
+    try {
+      const facilities = await fetchNearestFacilities(lat, lng);
+      if (facilities.hospital) nearestHospitalMatch = facilityToMatch(facilities.hospital);
+      if (facilities.police) nearestPoliceMatch = facilityToMatch(facilities.police);
+      if (needsSpecialResponse && facilities.fireStation) {
+        nearestFireMatch = facilityToMatch(facilities.fireStation);
+      }
+      if (needsSpecialResponse && facilities.trafficControl) {
+        nearestTrafficMatch = facilityToMatch(facilities.trafficControl);
+      }
+    } catch (error) {
+      console.warn('Overpass lookup failed; using local emergency facility fallback:', error);
+    }
 
     if (!nearestHospitalMatch || !nearestPoliceMatch || (needsSpecialResponse && (!nearestFireMatch || !nearestTrafficMatch))) {
       return NextResponse.json({ success: false, error: 'No emergency units available in dataset' }, { status: 500 });
