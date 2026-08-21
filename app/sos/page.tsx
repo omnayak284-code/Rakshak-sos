@@ -228,13 +228,14 @@ function SosContent() {
   );
 
   // ---------- SMS body for zero-internet fallback ----------
-  const smsBody = coords
-    ? encodeURIComponent(
-        `RAKSHAK SOS: Emergency at Highway KM ${kmId}. Location: https://maps.google.com/?q=${coords.lat},${coords.lng}. Type: ${
-          selectedEmergency ? selectedEmergency.replace(/_/g, ' ') : 'Unspecified'
-        }. Estimated Victims: ${victimCount || 'Unknown'}. Please send help immediately.`
-      )
-    : encodeURIComponent('RAKSHAK SOS: Emergency on highway. Location unavailable. Please trace call and send help.');
+  const emergencyLabel =
+    EMERGENCY_CATEGORIES.find((category) => category.id === selectedEmergency)?.label || 'Emergency';
+  const smsLocation = coords
+    ? `https://maps.google.com/?q=${coords.lat},${coords.lng}`
+    : 'Location unavailable';
+  const smsBody = encodeURIComponent(
+    `RAKSHAK SOS: Emergency at Highway KM ${kmId}. Location: ${smsLocation}. Type: ${emergencyLabel}. Estimated Victims: ${victimCount || 'Unknown'}. Please send help immediately.`
+  );
 
   const legalPassSms = dispatchResult
     ? encodeURIComponent(
