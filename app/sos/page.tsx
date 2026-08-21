@@ -27,6 +27,7 @@ import {
 
 // ---------- Types ----------
 type EmergencyType = 'severe_bleeding' | 'unconscious_no_breathing' | 'trapped_vehicle' | 'vehicle_fire';
+type VictimCount = '1 Person' | '2–3 People' | '4+ (Mass Casualty)';
 
 interface Coordinates {
   lat: number;
@@ -50,6 +51,7 @@ interface DispatchResponse {
   alertId: string;
   km_id: string;
   emergencyType: string;
+  victimCount: VictimCount;
   nearestHospital: DispatchedUnit;
   nearestPolice: DispatchedUnit;
   timestamp: string;
@@ -66,6 +68,8 @@ const EMERGENCY_CATEGORIES: {
   { id: 'trapped_vehicle', label: 'Trapped in Vehicle', icon: CarFront, color: 'bg-amber-600 hover:bg-amber-700 active:bg-amber-800' },
   { id: 'vehicle_fire', label: 'Vehicle Fire', icon: Flame, color: 'bg-rose-700 hover:bg-rose-800 active:bg-rose-900' },
 ];
+
+const VICTIM_COUNT_OPTIONS: VictimCount[] = ['1 Person', '2–3 People', '4+ (Mass Casualty)'];
 
 const FIRST_AID_GUIDANCE: Record<EmergencyType, { steps: string[] }> = {
   severe_bleeding: {
@@ -110,6 +114,7 @@ function SosContent() {
   const [locationError, setLocationError] = useState<string | null>(null);
 
   const [selectedEmergency, setSelectedEmergency] = useState<EmergencyType | null>(null);
+    const [victimCount, setVictimCount] = useState<VictimCount | null>(null);
   const [dispatching, setDispatching] = useState(false);
   const [dispatchResult, setDispatchResult] = useState<DispatchResponse | null>(null);
   const [dispatchError, setDispatchError] = useState<string | null>(null);
@@ -177,14 +182,17 @@ function SosContent() {
   }, [searchParams]);
 
   // ---------- Dispatch alert ----------
-  const handleEmergencySelect = useCallback(
-    async (type: EmergencyType) => {
+  const handleDispatch = useCallback(
+    async () => {
       if (!coords) {
         setDispatchError('Location not available yet. Please wait for GPS lock or try again.');
         return;
       }
+      if (!selectedEmergency || !victimCount) {
+        setDispatchError('Select an emergency type and estimated victim count before dispatching.');
+        return;
+      }
 
-      setSelectedEmergency(type);
       setDispatching(true);
       setDispatchError(null);
 
@@ -196,7 +204,8 @@ function SosContent() {
             km_id: kmId,
             lat: coords.lat,
             lng: coords.lng,
-            emergencyType: type,
+            emergencyType: selectedEmergency,
+            victimCount,
             bystanderPhone: bystanderPhone || undefined,
           }),
         });
@@ -215,7 +224,7 @@ function SosContent() {
         setDispatching(false);
       }
     },
-    [coords, kmId, bystanderPhone]
+    [coords, kmId, bystanderPhone, selectedEmergency, victimCount]
   );
 
   // ---------- SMS body for zero-internet fallback ----------
@@ -223,7 +232,7 @@ function SosContent() {
     ? encodeURIComponent(
         `RAKSHAK SOS: Emergency at Highway KM ${kmId}. Location: https://maps.google.com/?q=${coords.lat},${coords.lng}. Type: ${
           selectedEmergency ? selectedEmergency.replace(/_/g, ' ') : 'Unspecified'
-        }. Please send help immediately.`
+        }. Estimated Victims: ${victimCount || 'Unknown'}. Please send help immediately.`
       )
     : encodeURIComponent('RAKSHAK SOS: Emergency on highway. Location unavailable. Please trace call and send help.');
 
@@ -308,12 +317,15 @@ function SosContent() {
                     return (
                       <button
                         key={cat.id}
-                        onClick={() => handleEmergencySelect(cat.id)}
+                        onClick={() => {
+                          setSelectedEmergency(cat.id);
+                          setDispatchError(null);
+                        }}
                         disabled={dispatching}
                         className={`${cat.color} rounded-2xl p-3 sm:p-4 flex flex-col items-center justify-center gap-2 min-h-[100px] sm:min-h-[120px] text-white font-bold shadow-lg transition-transform active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed`}
                       >
-                        {isSelected && dispatching ? (
-                          <Loader2 className="w-8 h-8 animate-spin" />
+                        {isSelected ? (
+                          <CheckCircle2 className="w-8 h-8" />
                         ) : (
                           <Icon className="w-8 h-8" strokeWidth={2.5} />
                         )}
@@ -322,6 +334,41 @@ function SosContent() {
                     );
                   })}
                 </div>
+
+                {selectedEmergency && (
+                  <div className="mt-4 bg-neutral-900 border border-neutral-800 rounded-2xl p-4">
+                    <h3 className="text-sm font-semibold text-neutral-200 mb-3">
+                      Estimated Victims / People Injured
+                    </h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      {VICTIM_COUNT_OPTIONS.map((option) => (
+                        <button
+                          key={option}
+                          type="button"
+                          onClick={() => {
+                            setVictimCount(option);
+                            setDispatchError(null);
+                          }}
+                          className={`rounded-full px-3 py-3 text-sm font-semibold transition-colors ${
+                            victimCount === option
+                              ? 'bg-emerald-600 text-white ring-2 ring-emerald-300'
+                              : 'bg-neutral-800 text-neutral-300 hover:bg-neutral-700'
+                          }`}
+                        >
+                          {option}
+                        </button>
+                      ))}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleDispatch}
+                      disabled={!victimCount || dispatching}
+                      className="w-full mt-3 rounded-xl bg-red-600 hover:bg-red-700 p-3 text-white font-bold disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {dispatching ? 'Dispatching...' : 'Dispatch Emergency Help'}
+                    </button>
+                  </div>
+                )}
 
                 {dispatchError && (
                   <div className="mt-3 bg-red-950 border border-red-800 rounded-xl p-3 flex items-start gap-2">
@@ -381,6 +428,9 @@ function PostDispatchConfirmation({
   </div>
 </div>
         <div className="mt-4 space-y-3">
+          <p className="bg-red-900/50 rounded-xl p-3 text-sm font-bold text-red-100">
+            🚨 Priority Dispatch: {result.victimCount} casualty response requested
+          </p>
           <div className="flex items-start gap-3 bg-emerald-700/30 rounded-xl p-3">
             <ShieldAlert className="w-5 h-5 text-emerald-100 flex-shrink-0 mt-0.5" />
             <div className="text-sm text-emerald-50 leading-snug">

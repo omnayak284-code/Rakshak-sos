@@ -7,6 +7,7 @@ interface AlertPayload {
   lat: number;
   lng: number;
   emergencyType: 'severe_bleeding' | 'unconscious_no_breathing' | 'trapped_vehicle' | 'vehicle_fire';
+  victimCount: '1 Person' | '2–3 People' | '4+ (Mass Casualty)';
   bystanderPhone?: string;
 }
 
@@ -36,6 +37,7 @@ interface DispatchResult {
   alertId: string;
   km_id: string;
   emergencyType: string;
+  victimCount: AlertPayload['victimCount'];
   nearestHospital: DispatchedUnit;
   nearestPolice: DispatchedUnit;
   timestamp: string;
@@ -162,7 +164,7 @@ function validatePayload(body: any): { valid: boolean; error?: string; payload?:
   if (!body || typeof body !== 'object') {
     return { valid: false, error: 'Invalid request body' };
   }
-  const { km_id, lat, lng, emergencyType, bystanderPhone } = body;
+  const { km_id, lat, lng, emergencyType, victimCount, bystanderPhone } = body;
 
   if (typeof km_id !== 'string' || km_id.trim().length === 0) {
     return { valid: false, error: 'km_id is required and must be a string' };
@@ -181,13 +183,17 @@ function validatePayload(body: any): { valid: boolean; error?: string; payload?:
   if (!validTypes.includes(emergencyType)) {
     return { valid: false, error: `emergencyType must be one of: ${validTypes.join(', ')}` };
   }
+  const validVictimCounts: AlertPayload['victimCount'][] = ['1 Person', '2–3 People', '4+ (Mass Casualty)'];
+  if (!validVictimCounts.includes(victimCount)) {
+    return { valid: false, error: `victimCount must be one of: ${validVictimCounts.join(', ')}` };
+  }
   if (bystanderPhone !== undefined && typeof bystanderPhone !== 'string') {
     return { valid: false, error: 'bystanderPhone must be a string if provided' };
   }
   return {
     valid: true,
     payload: {
-      km_id: km_id.trim(), lat: latNum, lng: lngNum, emergencyType,
+      km_id: km_id.trim(), lat: latNum, lng: lngNum, emergencyType, victimCount,
       bystanderPhone: bystanderPhone || undefined,
     },
   };
@@ -203,7 +209,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: validation.error || 'Invalid payload' }, { status: 400 });
     }
 
-    const { km_id, lat, lng, emergencyType, bystanderPhone } = validation.payload;
+    const { km_id, lat, lng, emergencyType, victimCount, bystanderPhone } = validation.payload;
 
     const nearestHospitalMatch = findNearestByType(lat, lng, 'hospital');
     const nearestPoliceMatch = findNearestByType(lat, lng, 'police');
@@ -219,8 +225,8 @@ export async function POST(request: NextRequest) {
     const hospitalEta = estimateEtaMinutes(nearestHospitalMatch.distanceKm);
     const policeEta = estimateEtaMinutes(nearestPoliceMatch.distanceKm);
 
-    const hospitalMessage = `RAKSHAK SOS ALERT [${alertId}]. Type: ${emergencyLabel}. Highway KM ${km_id}. Location: ${locationLink}. Distance: ${nearestHospitalMatch.distanceKm.toFixed(2)} km. ETA ${hospitalEta} min. Respond immediately.`;
-    const policeMessage = `RAKSHAK SOS ALERT [${alertId}]. Type: ${emergencyLabel}. Highway KM ${km_id}. Location: ${locationLink}. Distance: ${nearestPoliceMatch.distanceKm.toFixed(2)} km. ETA ${policeEta} min. Respond immediately.`;
+    const hospitalMessage = `RAKSHAK SOS ALERT [${alertId}]. Type: ${emergencyLabel}. Estimated Victims: ${victimCount}. Highway KM ${km_id}. Location: ${locationLink}. Distance: ${nearestHospitalMatch.distanceKm.toFixed(2)} km. ETA ${hospitalEta} min. Respond immediately.`;
+    const policeMessage = `RAKSHAK SOS ALERT [${alertId}]. Type: ${emergencyLabel}. Estimated Victims: ${victimCount}. Highway KM ${km_id}. Location: ${locationLink}. Distance: ${nearestPoliceMatch.distanceKm.toFixed(2)} km. ETA ${policeEta} min. Respond immediately.`;
 
     const [hospCall, hospSms, polCall, polSms] = await Promise.all([
       dispatchCall(nearestHospitalMatch.unit.phone, hospitalMessage),
@@ -230,7 +236,7 @@ export async function POST(request: NextRequest) {
     ]);
 
     if (bystanderPhone) {
-      const bystanderMessage = `Rakshak SOS: Alert ${alertId} dispatched. Hospital: ${nearestHospitalMatch.unit.name} (${hospitalEta} min). Police: ${nearestPoliceMatch.unit.name} (${policeEta} min). Dial 112 if situation worsens.`;
+      const bystanderMessage = `Rakshak SOS: Alert ${alertId} dispatched for ${victimCount}. Hospital: ${nearestHospitalMatch.unit.name} (${hospitalEta} min). Police: ${nearestPoliceMatch.unit.name} (${policeEta} min). Dial 112 if situation worsens.`;
       dispatchSms(bystanderPhone, bystanderMessage).catch((err) => console.error('Bystander SMS failed:', err));
     }
 
@@ -239,6 +245,7 @@ export async function POST(request: NextRequest) {
       alertId,
       km_id,
       emergencyType,
+      victimCount,
       nearestHospital: {
         id: nearestHospitalMatch.unit.id,
         name: nearestHospitalMatch.unit.name,
