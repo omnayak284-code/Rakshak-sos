@@ -30,6 +30,12 @@ export default function HomePage() {
         </div>
       </div>
 
+      <p className="text-sm font-bold leading-relaxed text-red-200 max-w-xs">
+        Scan QR for SOS dispatch
+        <br />
+        No internet? Call 112 or SMS 112 directly
+      </p>
+
       <div className="flex items-center gap-2 text-neutral-500 text-xs bg-neutral-900 border border-neutral-800 rounded-full px-4 py-2">
         <MapPin className="w-3.5 h-3.5" />
         <span>Highway KM {DEMO_KM_ID} — Demo Marker</span>

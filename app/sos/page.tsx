@@ -117,9 +117,14 @@ function SosContent() {
 
   const [showCpr, setShowCpr] = useState(false);
   const [isOnline, setIsOnline] = useState<boolean | null>(null);
+  const [showOfflineNotice, setShowOfflineNotice] = useState(false);
 
   useEffect(() => {
-    const updateConnectionStatus = () => setIsOnline(navigator.onLine);
+    const updateConnectionStatus = () => {
+      const online = navigator.onLine;
+      setIsOnline(online);
+      setShowOfflineNotice(!online);
+    };
 
     updateConnectionStatus();
     window.addEventListener('online', updateConnectionStatus);
@@ -243,15 +248,44 @@ function SosContent() {
 
       <main className="px-4 py-4 space-y-4 max-w-lg mx-auto">
         {isOnline === false && (
-          <section className="bg-amber-950 border border-amber-800 rounded-2xl p-4 flex items-start gap-3">
-            <WifiOff className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
-            <div>
-              <p className="font-bold text-amber-200">Limited connection</p>
-              <p className="text-sm text-amber-300 mt-1">
-                Dispatch is paused. Use the call or SMS buttons below; they use your mobile network directly.
-              </p>
-            </div>
-          </section>
+          <>
+            {showOfflineNotice && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4" role="alertdialog" aria-modal="true">
+                <section className="w-full max-w-sm bg-neutral-900 border-2 border-amber-700 rounded-2xl p-5 shadow-2xl">
+                  <div className="flex items-start gap-3">
+                    <WifiOff className="w-6 h-6 text-amber-400 flex-shrink-0" />
+                    <div>
+                      <h2 className="text-lg font-bold text-amber-200">Internet connection is off</h2>
+                      <p className="text-sm text-neutral-300 mt-2">
+                        Turn on internet to access SOS dispatch and location services.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex gap-3 mt-5">
+                    <a href="tel:112" className="flex-1 bg-green-700 hover:bg-green-600 rounded-xl p-3 text-center text-white font-bold">
+                      Call 112
+                    </a>
+                    <button
+                      type="button"
+                      onClick={() => setShowOfflineNotice(false)}
+                      className="flex-1 bg-neutral-700 hover:bg-neutral-600 rounded-xl p-3 text-white font-semibold"
+                    >
+                      Continue offline
+                    </button>
+                  </div>
+                </section>
+              </div>
+            )}
+            <section className="bg-amber-950 border border-amber-800 rounded-2xl p-4 flex items-start gap-3">
+              <WifiOff className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="font-bold text-amber-200">Limited connection</p>
+                <p className="text-sm text-amber-300 mt-1">
+                  Dispatch is paused. Use the call or SMS buttons below; they use your mobile network directly.
+                </p>
+              </div>
+            </section>
+          </>
         )}
 
         {isOnline === true && (
