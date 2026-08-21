@@ -114,7 +114,7 @@ function SosContent() {
   const [locationError, setLocationError] = useState<string | null>(null);
 
   const [selectedEmergency, setSelectedEmergency] = useState<EmergencyType | null>(null);
-    const [victimCount, setVictimCount] = useState<VictimCount | null>(null);
+  const [victimCount, setVictimCount] = useState<VictimCount | null>(null);
   const [dispatching, setDispatching] = useState(false);
   const [dispatchResult, setDispatchResult] = useState<DispatchResponse | null>(null);
   const [dispatchError, setDispatchError] = useState<string | null>(null);
@@ -122,11 +122,18 @@ function SosContent() {
 
   const [showCpr, setShowCpr] = useState(false);
   const [isOnline, setIsOnline] = useState<boolean | null>(null);
+  const [countdown, setCountdown] = useState<number | null>(null);
+  const [isTimerActive, setIsTimerActive] = useState(false);
+  const audioContextRef = useRef<AudioContext | null>(null);
 
   useEffect(() => {
     const updateConnectionStatus = () => {
       const online = navigator.onLine;
       setIsOnline(online);
+      if (!online) {
+        setIsTimerActive(false);
+        setCountdown(null);
+      }
     };
 
     updateConnectionStatus();
@@ -227,6 +234,75 @@ function SosContent() {
     [coords, kmId, bystanderPhone, selectedEmergency, victimCount]
   );
 
+  const playCountdownBeep = useCallback(() => {
+    try {
+      if (!audioContextRef.current) {
+        audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+      }
+      const context = audioContextRef.current;
+      const oscillator = context.createOscillator();
+      const gain = context.createGain();
+      oscillator.type = 'sine';
+      oscillator.frequency.setValueAtTime(660, context.currentTime);
+      gain.gain.setValueAtTime(0.12, context.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, context.currentTime + 0.12);
+      oscillator.connect(gain);
+      gain.connect(context.destination);
+      oscillator.start();
+      oscillator.stop(context.currentTime + 0.12);
+    } catch (error) {
+      console.error('Countdown audio error:', error);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isTimerActive || countdown === null) return;
+
+    if (countdown === 0) {
+      setIsTimerActive(false);
+      setCountdown(null);
+      void handleDispatch();
+      return;
+    }
+
+    playCountdownBeep();
+    const timer = window.setTimeout(() => {
+      setCountdown((current) => (current === null ? null : current - 1));
+    }, 1000);
+
+    return () => window.clearTimeout(timer);
+  }, [countdown, handleDispatch, isTimerActive, playCountdownBeep]);
+
+  useEffect(() => {
+    return () => {
+      if (audioContextRef.current) {
+        void audioContextRef.current.close();
+      }
+    };
+  }, []);
+
+  const handleEmergencySelect = (type: EmergencyType) => {
+    setSelectedEmergency(type);
+    setVictimCount((current) => current || '1 Person');
+    setDispatchError(null);
+    setCountdown(10);
+    setIsTimerActive(true);
+  };
+
+  const handleCancelDispatch = () => {
+    setIsTimerActive(false);
+    setCountdown(null);
+    setSelectedEmergency(null);
+    setVictimCount(null);
+    setDispatchError(null);
+  };
+
+  const handleInstantDispatch = () => {
+    setIsTimerActive(false);
+    setCountdown(null);
+    void handleDispatch();
+  };
+
   // ---------- SMS body for zero-internet fallback ----------
   const emergencyLabel =
     EMERGENCY_CATEGORIES.find((category) => category.id === selectedEmergency)?.label || 'Emergency';
@@ -318,10 +394,7 @@ function SosContent() {
                     return (
                       <button
                         key={cat.id}
-                        onClick={() => {
-                          setSelectedEmergency(cat.id);
-                          setDispatchError(null);
-                        }}
+                        onClick={() => handleEmergencySelect(cat.id)}
                         disabled={dispatching}
                         className={`${cat.color} rounded-2xl p-3 sm:p-4 flex flex-col items-center justify-center gap-2 min-h-[100px] sm:min-h-[120px] text-white font-bold shadow-lg transition-transform active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed`}
                       >
@@ -335,6 +408,50 @@ function SosContent() {
                     );
                   })}
                 </div>
+
+                {isTimerActive && countdown !== null && selectedEmergency && (
+                  <div className="mt-4 bg-neutral-950 border-2 border-red-600 rounded-2xl p-4 text-center shadow-lg shadow-red-950/40">
+                    <div className="flex items-center justify-between gap-3 text-left">
+                      <div className="flex items-center gap-2">
+                        <span className="w-3 h-3 rounded-full bg-red-500 animate-ping" />
+                        <span className="text-xs font-bold text-red-300 uppercase tracking-wide">
+                          Auto-dispatching
+                        </span>
+                      </div>
+                      <span className="text-xs text-neutral-400">Tap another category to change</span>
+                    </div>
+
+                    <div className="mx-auto my-4 w-32 h-32 rounded-full border-8 border-red-700 bg-red-950 flex items-center justify-center animate-pulse">
+                      <span className="text-6xl font-black leading-none text-red-100 tabular-nums">
+                        {countdown}
+                      </span>
+                    </div>
+
+                    <p className="text-sm text-neutral-300">
+                      Transmitting <strong className="text-white">{emergencyLabel}</strong> in{' '}
+                      <strong className="text-red-300">{countdown}s</strong>
+                    </p>
+                    <p className="text-xs text-neutral-500 mt-1">A beep sounds every second.</p>
+
+                    <div className="flex gap-2 mt-4">
+                      <button
+                        type="button"
+                        onClick={handleCancelDispatch}
+                        className="flex-1 py-3 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 rounded-xl text-sm font-semibold border border-neutral-700"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleInstantDispatch}
+                        disabled={dispatching || !victimCount}
+                        className="flex-1 py-3 bg-red-600 hover:bg-red-500 text-white rounded-xl text-sm font-bold disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Instant Transmit
+                      </button>
+                    </div>
+                  </div>
+                )}
 
                 {selectedEmergency && (
                   <div className="mt-4 bg-neutral-900 border border-neutral-800 rounded-2xl p-4">
@@ -360,14 +477,6 @@ function SosContent() {
                         </button>
                       ))}
                     </div>
-                    <button
-                      type="button"
-                      onClick={handleDispatch}
-                      disabled={!victimCount || dispatching}
-                      className="w-full mt-3 rounded-xl bg-red-600 hover:bg-red-700 p-3 text-white font-bold disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {dispatching ? 'Dispatching...' : 'Dispatch Emergency Help'}
-                    </button>
                   </div>
                 )}
 
