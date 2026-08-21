@@ -8,7 +8,7 @@ import {
   Phone,
   MessageSquare,
   Droplet,
-  Bone,
+  HeartPulse,
   CarFront,
   Flame,
   Loader2,
@@ -26,7 +26,7 @@ import {
 } from 'lucide-react';
 
 // ---------- Types ----------
-type EmergencyType = 'severe_bleeding' | 'fractures' | 'trapped_vehicle' | 'vehicle_fire';
+type EmergencyType = 'severe_bleeding' | 'unconscious_no_breathing' | 'trapped_vehicle' | 'vehicle_fire';
 
 interface Coordinates {
   lat: number;
@@ -62,7 +62,7 @@ const EMERGENCY_CATEGORIES: {
   color: string;
 }[] = [
   { id: 'severe_bleeding', label: 'Severe Bleeding', icon: Droplet, color: 'bg-red-600 hover:bg-red-700 active:bg-red-800' },
-  { id: 'fractures', label: 'Fractures', icon: Bone, color: 'bg-orange-600 hover:bg-orange-700 active:bg-orange-800' },
+  { id: 'unconscious_no_breathing', label: 'Unconscious / No Breathing', icon: HeartPulse, color: 'bg-red-700 hover:bg-red-800 active:bg-red-900' },
   { id: 'trapped_vehicle', label: 'Trapped in Vehicle', icon: CarFront, color: 'bg-amber-600 hover:bg-amber-700 active:bg-amber-800' },
   { id: 'vehicle_fire', label: 'Vehicle Fire', icon: Flame, color: 'bg-rose-700 hover:bg-rose-800 active:bg-rose-900' },
 ];
@@ -75,11 +75,11 @@ const FIRST_AID_GUIDANCE: Record<EmergencyType, { steps: string[] }> = {
       'Keep the injured area raised above heart level if possible',
     ],
   },
-  fractures: {
+  unconscious_no_breathing: {
     steps: [
-      'Do not try to straighten or move the injured limb',
-      'Support the area above and below the injury to keep it still',
-      'Do not give food or water in case surgery is needed',
+      'Place the person flat on their back on a hard surface and tilt the head back gently to clear the airway',
+      'Start chest compressions immediately: place your hands in the center of the chest and push down 5–6 cm deep at 110 BPM',
+      'Do not stop or give water or food until paramedics arrive and take over',
     ],
   },
   trapped_vehicle: {

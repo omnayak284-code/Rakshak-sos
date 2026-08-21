@@ -6,7 +6,7 @@ interface AlertPayload {
   km_id: string;
   lat: number;
   lng: number;
-  emergencyType: 'severe_bleeding' | 'fractures' | 'trapped_vehicle' | 'vehicle_fire';
+  emergencyType: 'severe_bleeding' | 'unconscious_no_breathing' | 'trapped_vehicle' | 'vehicle_fire';
   bystanderPhone?: string;
 }
 
@@ -176,7 +176,7 @@ function validatePayload(body: any): { valid: boolean; error?: string; payload?:
     return { valid: false, error: 'lng is required and must be a valid longitude' };
   }
   const validTypes: AlertPayload['emergencyType'][] = [
-    'severe_bleeding', 'fractures', 'trapped_vehicle', 'vehicle_fire',
+    'severe_bleeding', 'unconscious_no_breathing', 'trapped_vehicle', 'vehicle_fire',
   ];
   if (!validTypes.includes(emergencyType)) {
     return { valid: false, error: `emergencyType must be one of: ${validTypes.join(', ')}` };
