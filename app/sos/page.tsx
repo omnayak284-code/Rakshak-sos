@@ -131,6 +131,19 @@ interface DispatchResponse {
   timestamp: string;
 }
 
+interface NearbyFacility {
+  name: string;
+  address: string;
+  distanceKm: number;
+}
+
+interface NearbyFacilities {
+  police: NearbyFacility | null;
+  hospital: NearbyFacility | null;
+  fireStation: NearbyFacility | null;
+  trafficControl: NearbyFacility | null;
+}
+
 const EMERGENCY_CATEGORIES: {
   id: EmergencyType;
   label: string;
@@ -189,6 +202,9 @@ function SosContent() {
   const [coords, setCoords] = useState<Coordinates | null>(null);
   const [locationLoading, setLocationLoading] = useState(true);
   const [locationError, setLocationError] = useState<string | null>(null);
+  const [nearbyFacilities, setNearbyFacilities] = useState<NearbyFacilities | null>(null);
+  const [facilitiesLoading, setFacilitiesLoading] = useState(false);
+  const [facilitiesError, setFacilitiesError] = useState<string | null>(null);
 
   const [selectedEmergency, setSelectedEmergency] = useState<EmergencyType | null>(null);
   const [victimCount, setVictimCount] = useState<VictimCount | null>(null);
@@ -253,6 +269,33 @@ function SosContent() {
       setLocationLoading(false);
     }
   }, [searchParams]);
+
+  useEffect(() => {
+    if (!coords || isOnline !== true) return;
+
+    const controller = new AbortController();
+    setFacilitiesLoading(true);
+    setFacilitiesError(null);
+
+    fetch(`/api/facilities?lat=${coords.lat}&lng=${coords.lng}`, {
+      signal: controller.signal,
+      cache: 'no-store',
+    })
+      .then(async (response) => {
+        if (!response.ok) throw new Error('Nearby facility lookup failed');
+        return (await response.json()) as NearbyFacilities;
+      })
+      .then((facilities) => setNearbyFacilities(facilities))
+      .catch((error: unknown) => {
+        if (error instanceof DOMException && error.name === 'AbortError') return;
+        console.error('Nearby facility lookup error:', error);
+        setNearbyFacilities(null);
+        setFacilitiesError('Nearby facility names are unavailable right now.');
+      })
+      .finally(() => setFacilitiesLoading(false));
+
+    return () => controller.abort();
+  }, [coords, isOnline]);
 
   const requestLocation = useCallback(() => {
     setLocationLoading(true);
@@ -552,6 +595,25 @@ function SosContent() {
               </div>
             </section>
 
+            <section className="bg-neutral-900 border border-neutral-800 rounded-2xl p-4">
+              <div className="flex items-center justify-between gap-3 mb-3">
+                <h2 className="text-sm font-bold text-neutral-200">Nearest emergency facilities</h2>
+                {facilitiesLoading && <Loader2 className="w-4 h-4 animate-spin text-emerald-400" />}
+              </div>
+              {facilitiesError && <p className="text-xs text-amber-300">{facilitiesError}</p>}
+              {!facilitiesLoading && !facilitiesError && nearbyFacilities && (
+                <div className="space-y-2 text-xs">
+                  <NearbyFacilityRow icon="🚓" label="Police" facility={nearbyFacilities.police} />
+                  <NearbyFacilityRow icon="🏥" label="Hospital" facility={nearbyFacilities.hospital} />
+                  <NearbyFacilityRow icon="🚒" label="Fire & Rescue" facility={nearbyFacilities.fireStation} />
+                  <NearbyFacilityRow icon="🚧" label="Traffic Control" facility={nearbyFacilities.trafficControl} />
+                </div>
+              )}
+              {!facilitiesLoading && !facilitiesError && !nearbyFacilities && (
+                <p className="text-xs text-neutral-500">Waiting for nearby facility results...</p>
+              )}
+            </section>
+
             {/* Emergency Triage Grid */}
             {!dispatchResult && (
               <section>
@@ -818,6 +880,33 @@ function FirstAidGuidance({ type, language }: { type: EmergencyType; language: L
         ))}
       </ul>
     </section>
+  );
+}
+
+function NearbyFacilityRow({
+  icon,
+  label,
+  facility,
+}: {
+  icon: string;
+  label: string;
+  facility: NearbyFacility | null;
+}) {
+  return (
+    <div className="flex items-start gap-2 rounded-xl bg-neutral-950 p-2.5">
+      <span className="text-base" aria-hidden="true">{icon}</span>
+      <div className="min-w-0 flex-1">
+        <p className="font-semibold text-neutral-200">{label}</p>
+        {facility ? (
+          <>
+            <p className="truncate text-neutral-300">{facility.name}</p>
+            <p className="text-neutral-500">{facility.address} · {facility.distanceKm} km away</p>
+          </>
+        ) : (
+          <p className="text-neutral-500">No mapped facility found within 25 km</p>
+        )}
+      </div>
+    </div>
   );
 }
 
