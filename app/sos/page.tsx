@@ -23,11 +23,77 @@ import {
   Send,
   ShieldAlert,
   Hospital,
+  Globe2,
 } from 'lucide-react';
 
 // ---------- Types ----------
 type EmergencyType = 'severe_bleeding' | 'unconscious_no_breathing' | 'trapped_vehicle' | 'vehicle_fire';
 type VictimCount = '1 Person' | '2–3 People' | '4+ (Mass Casualty)';
+type Language = 'en' | 'or' | 'hi';
+
+const TRANSLATIONS = {
+  en: {
+    title: 'Rakshak SOS', subtitle: 'Highway Emergency Response', chooseLanguage: 'Choose your language',
+    languageHint: 'Select a language to continue', marker: 'Highway Marker', gps: 'Acquiring GPS location...',
+    selectEmergency: 'SELECT EMERGENCY TYPE — 1 TAP TO DISPATCH', victims: 'Estimated Victims / People Injured',
+    one: '1 Person', twoThree: '2–3 People', mass: '4+ (Mass Casualty)', autoDispatching: 'Auto-dispatching',
+    changeCategory: 'Tap another category to change', transmitting: 'Transmitting', beep: 'A beep sounds every second.',
+    cancel: 'Cancel', instant: 'Instant Transmit', priority: 'Priority Dispatch', requested: 'casualty response requested',
+    helpOnWay: 'Help Is On the Way', dispatched: 'SOS dispatched to nearest police & hospital', whileWait: 'While You Wait',
+    legalTitle: 'Good Samaritan Digital Shield', legalHeading: 'You cannot be detained, questioned, or billed',
+    legalBody: 'Under Section 134A of the Motor Vehicles Act, 1988 and MoRTH Good Samaritan guidelines, a bystander who helps a crash victim is protected from civil and criminal liability.',
+    saveLegal: 'Save Legal Pass to SMS', connectionLost: 'CONNECTION LOST — USE THESE DIRECTLY',
+    directHint: 'These use your mobile network directly and do not require this page to reach the dispatch server.',
+    call: 'Call 112', sms: 'SMS 112',
+    emergency: { severe_bleeding: 'Severe Bleeding', unconscious_no_breathing: 'Unconscious / No Breathing', trapped_vehicle: 'Trapped in Vehicle', vehicle_fire: 'Vehicle Fire' },
+    guidance: {
+      severe_bleeding: ['Apply firm, direct pressure on the wound with a clean cloth', 'Do not remove the cloth if it soaks through — add more on top', 'Keep the injured area raised above heart level if possible'],
+      unconscious_no_breathing: ['Place the person flat on their back on a hard surface and tilt the head back gently to clear the airway', 'Start chest compressions immediately: place your hands in the center of the chest and push down 5–6 cm deep at 110 BPM', 'Do not stop or give water or food until paramedics arrive and take over'],
+      trapped_vehicle: ['Do not attempt to pull the person out unless there is fire risk', 'Turn off the vehicle engine if it is safely reachable', 'Keep the person calm and talking until rescue arrives'],
+      vehicle_fire: ['Move everyone at least 30 meters away from the vehicle', 'Do not attempt to open the hood or fight the fire yourself', 'Warn oncoming traffic if it is safe to do so'],
+    },
+  },
+  or: {
+    title: 'ରକ୍ଷକ SOS', subtitle: 'ରାଜପଥ ଜରୁରୀକାଳୀନ ସହାୟତା', chooseLanguage: 'ଆପଣଙ୍କର ଭାଷା ବାଛନ୍ତୁ',
+    languageHint: 'ଆଗକୁ ବଢ଼ିବା ପାଇଁ ଭାଷା ବାଛନ୍ତୁ', marker: 'ରାଜପଥ ଚିହ୍ନ', gps: 'GPS ସ୍ଥାନ ଖୋଜାଯାଉଛି...',
+    selectEmergency: 'ଜରୁରୀକାଳୀନ ପ୍ରକାର ବାଛନ୍ତୁ — ୧ ଟ୍ୟାପ୍', victims: 'ଆହତଙ୍କ ଆନୁମାନିକ ସଂଖ୍ୟା',
+    one: '୧ ଜଣ', twoThree: '୨–୩ ଜଣ', mass: '୪+ (ଅନେକ ଆହତ)', autoDispatching: 'ସ୍ୱୟଂଚାଳିତ ପଠାଯାଉଛି',
+    changeCategory: 'ପରିବର୍ତ୍ତନ ପାଇଁ ଅନ୍ୟ ପ୍ରକାର ବାଛନ୍ତୁ', transmitting: 'ପଠାଯାଉଛି', beep: 'ପ୍ରତି ସେକେଣ୍ଡରେ ଧ୍ୱନି ହେବ।',
+    cancel: 'ବାତିଲ୍', instant: 'ଏବେ ପଠାନ୍ତୁ', priority: 'ଜରୁରୀ ପଠାଣ', requested: 'ଆହତଙ୍କ ପାଇଁ ସହାୟତା ଅନୁରୋଧ',
+    helpOnWay: 'ସହାୟତା ଆସୁଛି', dispatched: 'ନିକଟତମ ପୋଲିସ ଓ ହସ୍ପିଟାଲକୁ SOS ପଠାଯାଇଛି', whileWait: 'ସହାୟତା ଆସିବା ପର୍ଯ୍ୟନ୍ତ',
+    legalTitle: 'ଉତ୍ତମ ନାଗରିକ ଆଇନଗତ ସୁରକ୍ଷା', legalHeading: 'ଆପଣଙ୍କୁ ଅଟକାଇ, ପଚରାଉଚରା କିମ୍ବା ବିଲ୍ କରାଯାଇପାରିବ ନାହିଁ',
+    legalBody: 'ମୋଟର ଯାନ ଆଇନ, ୧୯୮୮ ର ଧାରା ୧୩୪A ଅନୁଯାୟୀ, ଦୁର୍ଘଟଣାଗ୍ରସ୍ତଙ୍କୁ ସାହାଯ୍ୟ କରୁଥିବା ବ୍ୟକ୍ତି ଆଇନଗତ ସୁରକ୍ଷା ପାଆନ୍ତି।',
+    saveLegal: 'ଆଇନଗତ ପାସ୍ SMS ରେ ସେଭ୍ କରନ୍ତୁ', connectionLost: 'ସଂଯୋଗ ନାହିଁ — ଏଗୁଡ଼ିକ ସିଧାସଳଖ ବ୍ୟବହାର କରନ୍ତୁ',
+    directHint: 'ଏଗୁଡ଼ିକ ମୋବାଇଲ୍ ନେଟୱର୍କରେ ସିଧାସଳଖ କାମ କରେ।', call: '୧୧୨ କଲ୍ କରନ୍ତୁ', sms: '୧୧୨ SMS',
+    emergency: { severe_bleeding: 'ପ୍ରବଳ ରକ୍ତସ୍ରାବ', unconscious_no_breathing: 'ଅଚେତ / ନିଶ୍ୱାସ ବନ୍ଦ', trapped_vehicle: 'ଗାଡ଼ିରେ ଫସିଛନ୍ତି', vehicle_fire: 'ଗାଡ଼ିରେ ନିଆଁ' },
+    guidance: {
+      severe_bleeding: ['ସଫା କପଡ଼ାରେ ଘା ଉପରେ ଦୃଢ଼ ଚାପ ଦିଅନ୍ତୁ', 'କପଡ଼ା ଭିଜିଗଲେ ତାହା କାଢ଼ନ୍ତୁ ନାହିଁ — ଉପରେ ଆଉ କପଡ଼ା ରଖନ୍ତୁ', 'ସମ୍ଭବ ହେଲେ ଆହତ ସ୍ଥାନକୁ ହୃଦୟଠାରୁ ଉପରେ ରଖନ୍ତୁ'],
+      unconscious_no_breathing: ['ବ୍ୟକ୍ତିଙ୍କୁ କଠିନ ସ୍ଥାନରେ ପିଠି ଉପରେ ଶୁଆଇ ଶ୍ୱାସ ପଥ ଖୋଲିବା ପାଇଁ ମୁଣ୍ଡକୁ ଧୀରେ ପଛକୁ ନିଅନ୍ତୁ', 'ତୁରନ୍ତ ଛାତିର ମଝିରେ ୫–୬ ସେ.ମି. ଗଭୀରରେ ୧୧୦ BPM ରେ ଚାପ ଦିଅନ୍ତୁ', 'ପାରାମେଡିକ୍ ଆସିବା ପର୍ଯ୍ୟନ୍ତ ବନ୍ଦ କରନ୍ତୁ ନାହିଁ କିମ୍ବା ପାଣି/ଖାଦ୍ୟ ଦିଅନ୍ତୁ ନାହିଁ'],
+      trapped_vehicle: ['ନିଆଁର ବିପଦ ନଥିଲେ ବ୍ୟକ୍ତିଙ୍କୁ ବାହାର କରନ୍ତୁ ନାହିଁ', 'ନିରାପଦ ହେଲେ ଗାଡ଼ିର ଇଞ୍ଜିନ୍ ବନ୍ଦ କରନ୍ତୁ', 'ସହାୟତା ଆସିବା ପର୍ଯ୍ୟନ୍ତ ବ୍ୟକ୍ତିଙ୍କୁ ଶାନ୍ତ ରଖନ୍ତୁ'],
+      vehicle_fire: ['ସମସ୍ତଙ୍କୁ ଗାଡ଼ିଠାରୁ ଅତି କମରେ ୩୦ ମିଟର ଦୂରକୁ ନିଅନ୍ତୁ', 'ନିଜେ ଗାଡ଼ି ଖୋଲିବା କିମ୍ବା ନିଆଁ ଲିଭାଇବାକୁ ଚେଷ୍ଟା କରନ୍ତୁ ନାହିଁ', 'ନିରାପଦ ହେଲେ ଆସୁଥିବା ଗାଡ଼ିକୁ ସତର୍କ କରନ୍ତୁ'],
+    },
+  },
+  hi: {
+    title: 'रक्षक SOS', subtitle: 'राजमार्ग आपातकालीन सहायता', chooseLanguage: 'अपनी भाषा चुनें',
+    languageHint: 'आगे बढ़ने के लिए भाषा चुनें', marker: 'राजमार्ग स्थान', gps: 'GPS स्थान खोजा जा रहा है...',
+    selectEmergency: 'आपातकाल का प्रकार चुनें — 1 टैप', victims: 'घायलों की अनुमानित संख्या',
+    one: '1 व्यक्ति', twoThree: '2–3 लोग', mass: '4+ (बहुत से घायल)', autoDispatching: 'मदद अपने आप भेजी जा रही है',
+    changeCategory: 'बदलने के लिए दूसरा प्रकार चुनें', transmitting: 'भेजा जा रहा है', beep: 'हर सेकंड ध्वनि होगी।',
+    cancel: 'रद्द करें', instant: 'अभी भेजें', priority: 'प्राथमिक सहायता', requested: 'घायलों के लिए सहायता का अनुरोध',
+    helpOnWay: 'मदद रास्ते में है', dispatched: 'निकटतम पुलिस और अस्पताल को SOS भेजा गया है', whileWait: 'मदद आने तक',
+    legalTitle: 'गुड सेमेरिटन कानूनी सुरक्षा', legalHeading: 'आपको हिरासत में नहीं लिया, पूछताछ या बिल नहीं किया जा सकता',
+    legalBody: 'मोटर वाहन अधिनियम 1988 की धारा 134A के तहत दुर्घटना पीड़ित की मदद करने वाले नागरिक को कानूनी सुरक्षा मिलती है।',
+    saveLegal: 'कानूनी पास SMS में सेव करें', connectionLost: 'कनेक्शन नहीं है — सीधे इनका उपयोग करें',
+    directHint: 'ये आपके मोबाइल नेटवर्क से सीधे काम करते हैं।', call: '112 पर कॉल करें', sms: '112 SMS',
+    emergency: { severe_bleeding: 'गंभीर रक्तस्राव', unconscious_no_breathing: 'बेहोश / सांस बंद', trapped_vehicle: 'वाहन में फंसे हुए', vehicle_fire: 'वाहन में आग' },
+    guidance: {
+      severe_bleeding: ['साफ कपड़े से घाव पर जोर से दबाव डालें', 'कपड़ा भीग जाए तो उसे न हटाएं — ऊपर और कपड़ा रखें', 'संभव हो तो घायल हिस्से को हृदय से ऊपर रखें'],
+      unconscious_no_breathing: ['व्यक्ति को कठोर सतह पर पीठ के बल लिटाएं और सांस का रास्ता खोलने के लिए सिर को धीरे पीछे करें', 'तुरंत छाती के बीच में 5–6 सेमी गहराई तक 110 BPM की गति से दबाएं', 'पैरामेडिक्स के आने तक रुकें नहीं और पानी/खाना न दें'],
+      trapped_vehicle: ['आग का खतरा न हो तो व्यक्ति को बाहर निकालने की कोशिश न करें', 'सुरक्षित होने पर वाहन का इंजन बंद करें', 'मदद आने तक व्यक्ति को शांत रखें'],
+      vehicle_fire: ['सभी लोगों को वाहन से कम से कम 30 मीटर दूर ले जाएं', 'वाहन खोलने या आग बुझाने की कोशिश न करें', 'सुरक्षित हो तो आने वाले यातायात को चेतावनी दें'],
+    },
+  },
+} as const;
 
 interface Coordinates {
   lat: number;
@@ -107,6 +173,9 @@ const FIRST_AID_GUIDANCE: Record<EmergencyType, { steps: string[] }> = {
 // ============================================================
 function SosContent() {
   const searchParams = useSearchParams();
+  const [language, setLanguage] = useState<Language>('en');
+  const [isLanguageSelected, setIsLanguageSelected] = useState(false);
+  const t = TRANSLATIONS[language];
 
   const [kmId, setKmId] = useState<string>('Unknown');
   const [coords, setCoords] = useState<Coordinates | null>(null);
@@ -304,13 +373,24 @@ function SosContent() {
   };
 
   // ---------- SMS body for zero-internet fallback ----------
-  const emergencyLabel =
-    EMERGENCY_CATEGORIES.find((category) => category.id === selectedEmergency)?.label || 'Emergency';
+  const emergencyLabel = selectedEmergency ? t.emergency[selectedEmergency] : 'Emergency';
+  const victimLabel = victimCount
+    ? victimCount === '1 Person'
+      ? t.one
+      : victimCount === '2–3 People'
+        ? t.twoThree
+        : t.mass
+    : 'Unknown';
   const smsLocation = coords
     ? `https://maps.google.com/?q=${coords.lat},${coords.lng}`
     : 'Location unavailable';
+  const smsMessage = language === 'or'
+    ? `ରକ୍ଷକ SOS: ରାଜପଥ KM ${kmId} ରେ ଜରୁରୀକାଳୀନ ସହାୟତା ଆବଶ୍ୟକ। ସ୍ଥାନ: ${smsLocation}। ପ୍ରକାର: ${emergencyLabel}। ଆନୁମାନିକ ଆହତ: ${victimLabel}। ତୁରନ୍ତ ସହାୟତା ପଠାନ୍ତୁ।`
+    : language === 'hi'
+      ? `रक्षक SOS: राजमार्ग KM ${kmId} पर आपातकालीन सहायता चाहिए। स्थान: ${smsLocation}। प्रकार: ${emergencyLabel}। अनुमानित घायल: ${victimLabel}। तुरंत मदद भेजें।`
+      : `RAKSHAK SOS: Emergency at Highway KM ${kmId}. Location: ${smsLocation}. Type: ${emergencyLabel}. Estimated Victims: ${victimLabel}. Please send help immediately.`;
   const smsBody = encodeURIComponent(
-    `RAKSHAK SOS: Emergency at Highway KM ${kmId}. Location: ${smsLocation}. Type: ${emergencyLabel}. Estimated Victims: ${victimCount || 'Unknown'}. Please send help immediately.`
+    smsMessage
   );
 
   const legalPassSms = dispatchResult
@@ -321,12 +401,51 @@ function SosContent() {
 
   return (
     <div className="min-h-screen bg-neutral-950 text-white pb-safe">
+      {!isLanguageSelected && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 px-4" role="dialog" aria-modal="true">
+          <section className="w-full max-w-sm bg-neutral-900 border border-neutral-700 rounded-2xl p-6 text-center shadow-2xl">
+            <Globe2 className="w-8 h-8 mx-auto mb-3 text-red-400" />
+            <h2 className="text-xl font-bold text-white">{t.chooseLanguage}</h2>
+            <p className="text-sm text-neutral-400 mt-2 mb-5">{t.languageHint}</p>
+            <div className="grid gap-3">
+              {([['en', 'English'], ['or', 'ଓଡ଼ିଆ (Odia)'], ['hi', 'हिंदी (Hindi)']] as [Language, string][]).map(([code, label]) => (
+                <button
+                  key={code}
+                  type="button"
+                  onClick={() => {
+                    setLanguage(code);
+                    setIsLanguageSelected(true);
+                  }}
+                  className={`rounded-xl p-3 font-bold ${code === 'or' ? 'bg-red-700 hover:bg-red-600' : 'bg-neutral-800 hover:bg-neutral-700'}`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </section>
+        </div>
+      )}
       {/* Header */}
       <header className="sticky top-0 z-30 bg-neutral-950/95 backdrop-blur border-b border-neutral-800 px-4 py-3 flex items-center gap-2">
         <Siren className="w-6 h-6 text-red-500 flex-shrink-0" />
         <div className="flex-1 min-w-0">
-          <h1 className="text-lg font-bold leading-tight truncate">Rakshak SOS</h1>
-          <p className="text-xs text-neutral-400 leading-tight">Highway Emergency Response</p>
+          <h1 className="text-lg font-bold leading-tight truncate">{t.title}</h1>
+          <p className="text-xs text-neutral-400 leading-tight">{t.subtitle}</p>
+        </div>
+        <div className="flex gap-1 bg-neutral-900 border border-neutral-800 rounded-lg p-1">
+          {(['en', 'or', 'hi'] as Language[]).map((code) => (
+            <button
+              key={code}
+              type="button"
+              onClick={() => {
+                setLanguage(code);
+                setIsLanguageSelected(true);
+              }}
+              className={`px-2 py-1 rounded text-[11px] font-bold ${language === code ? 'bg-red-600 text-white' : 'text-neutral-400 hover:text-white'}`}
+            >
+              {code === 'en' ? 'EN' : code === 'or' ? 'ଓଡ଼ି' : 'हिं'}
+            </button>
+          ))}
         </div>
       </header>
 
@@ -335,9 +454,9 @@ function SosContent() {
           <section className="bg-amber-950 border border-amber-800 rounded-2xl p-4 flex items-start gap-3">
             <WifiOff className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
             <div>
-              <p className="font-bold text-amber-200">Limited connection</p>
+              <p className="font-bold text-amber-200">{t.connectionLost}</p>
               <p className="text-sm text-amber-300 mt-1">
-                Dispatch is paused. Use the call or SMS buttons below; they use your mobile network directly.
+                {t.directHint}
               </p>
             </div>
           </section>
@@ -352,12 +471,12 @@ function SosContent() {
                   <MapPin className="w-5 h-5 text-emerald-400" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm text-neutral-400">Highway Marker</p>
+                  <p className="text-sm text-neutral-400">{t.marker}</p>
                   <p className="text-xl font-bold">KM {kmId}</p>
                   {locationLoading && (
                     <div className="flex items-center gap-2 mt-2 text-sm text-neutral-400">
                       <Loader2 className="w-4 h-4 animate-spin" />
-                      <span>Acquiring GPS location...</span>
+                      <span>{t.gps}</span>
                     </div>
                   )}
                   {!locationLoading && coords && (
@@ -385,7 +504,7 @@ function SosContent() {
             {!dispatchResult && (
               <section>
                 <h2 className="text-sm font-semibold text-neutral-400 mb-2 px-1">
-                  SELECT EMERGENCY TYPE — 1 TAP TO DISPATCH
+                  {t.selectEmergency}
                 </h2>
                 <div className="grid grid-cols-2 gap-3">
                   {EMERGENCY_CATEGORIES.map((cat) => {
@@ -403,7 +522,7 @@ function SosContent() {
                         ) : (
                           <Icon className="w-8 h-8" strokeWidth={2.5} />
                         )}
-                        <span className="text-sm text-center leading-tight">{cat.label}</span>
+                        <span className="text-sm text-center leading-tight">{t.emergency[cat.id]}</span>
                       </button>
                     );
                   })}
@@ -415,10 +534,10 @@ function SosContent() {
                       <div className="flex items-center gap-2">
                         <span className="w-3 h-3 rounded-full bg-red-500 animate-ping" />
                         <span className="text-xs font-bold text-red-300 uppercase tracking-wide">
-                          Auto-dispatching
+                          {t.autoDispatching}
                         </span>
                       </div>
-                      <span className="text-xs text-neutral-400">Tap another category to change</span>
+                      <span className="text-xs text-neutral-400">{t.changeCategory}</span>
                     </div>
 
                     <div className="mx-auto my-4 w-32 h-32 rounded-full border-8 border-red-700 bg-red-950 flex items-center justify-center animate-pulse">
@@ -428,10 +547,10 @@ function SosContent() {
                     </div>
 
                     <p className="text-sm text-neutral-300">
-                      Transmitting <strong className="text-white">{emergencyLabel}</strong> in{' '}
+                      {t.transmitting} <strong className="text-white">{emergencyLabel}</strong> in{' '}
                       <strong className="text-red-300">{countdown}s</strong>
                     </p>
-                    <p className="text-xs text-neutral-500 mt-1">A beep sounds every second.</p>
+                    <p className="text-xs text-neutral-500 mt-1">{t.beep}</p>
 
                     <div className="flex gap-2 mt-4">
                       <button
@@ -439,7 +558,7 @@ function SosContent() {
                         onClick={handleCancelDispatch}
                         className="flex-1 py-3 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 rounded-xl text-sm font-semibold border border-neutral-700"
                       >
-                        Cancel
+                        {t.cancel}
                       </button>
                       <button
                         type="button"
@@ -447,7 +566,7 @@ function SosContent() {
                         disabled={dispatching || !victimCount}
                         className="flex-1 py-3 bg-red-600 hover:bg-red-500 text-white rounded-xl text-sm font-bold disabled:opacity-50 disabled:cursor-not-allowed"
                       >
-                        Instant Transmit
+                        {t.instant}
                       </button>
                     </div>
                   </div>
@@ -456,7 +575,7 @@ function SosContent() {
                 {selectedEmergency && (
                   <div className="mt-4 bg-neutral-900 border border-neutral-800 rounded-2xl p-4">
                     <h3 className="text-sm font-semibold text-neutral-200 mb-3">
-                      Estimated Victims / People Injured
+                      {t.victims}
                     </h3>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                       {VICTIM_COUNT_OPTIONS.map((option) => (
@@ -473,7 +592,7 @@ function SosContent() {
                               : 'bg-neutral-800 text-neutral-300 hover:bg-neutral-700'
                           }`}
                         >
-                          {option}
+                          {option === '1 Person' ? t.one : option === '2–3 People' ? t.twoThree : t.mass}
                         </button>
                       ))}
                     </div>
@@ -494,6 +613,7 @@ function SosContent() {
               <PostDispatchConfirmation
                 result={dispatchResult}
                 legalPassSms={legalPassSms}
+                language={language}
               />
             )}
 
@@ -503,7 +623,7 @@ function SosContent() {
         )}
 
         {/* Offline-safe direct actions */}
-        {isOnline === false && <ZeroInternetFallback smsBody={smsBody} />}
+        {isOnline === false && <ZeroInternetFallback smsBody={smsBody} language={language} />}
       </main>
     </div>
   );
@@ -515,10 +635,13 @@ function SosContent() {
 function PostDispatchConfirmation({
   result,
   legalPassSms,
+  language,
 }: {
   result: DispatchResponse;
   legalPassSms: string;
+  language: Language;
 }) {
+  const t = TRANSLATIONS[language];
   const isMockMode =
     result.nearestHospital.call.mode === 'mock' || result.nearestPolice.call.mode === 'mock';
 
@@ -530,16 +653,16 @@ function PostDispatchConfirmation({
   <span className="text-2xl leading-none">🚨</span>
   <div>
     <h2 className="text-xl font-bold leading-snug">
-      Help Is On the Way
+      {t.helpOnWay}
     </h2>
     <p className="text-sm text-emerald-100 mt-1">
-      SOS dispatched to nearest police &amp; hospital
+      {t.dispatched}
     </p>
   </div>
 </div>
         <div className="mt-4 space-y-3">
           <p className="bg-red-900/50 rounded-xl p-3 text-sm font-bold text-red-100">
-            🚨 Priority Dispatch: {result.victimCount} casualty response requested
+            🚨 {t.priority}: {result.victimCount} {t.requested}
           </p>
           <div className="flex items-start gap-3 bg-emerald-700/30 rounded-xl p-3">
             <ShieldAlert className="w-5 h-5 text-emerald-100 flex-shrink-0 mt-0.5" />
@@ -565,7 +688,7 @@ function PostDispatchConfirmation({
         )}
       </div>
 
-      <FirstAidGuidance type={result.emergencyType as EmergencyType} />
+      <FirstAidGuidance type={result.emergencyType as EmergencyType} language={language} />
 
       {/* Good Samaritan Digital Shield */}
       <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5">
@@ -573,24 +696,20 @@ function PostDispatchConfirmation({
           <ShieldCheck className="w-6 h-6 text-amber-700 flex-shrink-0 mt-0.5" />
           <div className="flex-1">
             <p className="text-xs font-bold tracking-wide text-amber-700 uppercase">
-              Good Samaritan Digital Shield
+              {t.legalTitle}
             </p>
             <h3 className="text-lg font-bold text-neutral-900 mt-1 leading-snug">
-              You cannot be detained, questioned, or billed
+              {t.legalHeading}
             </h3>
             <p className="text-sm text-neutral-700 mt-2 leading-relaxed">
-              Under <span className="font-semibold">Section 134A of the Motor Vehicles Act, 1988</span> and
-              MoRTH Good Samaritan guidelines, a bystander who helps a crash victim is protected from
-              civil and criminal liability. Police and hospitals must not detain you, force a statement as
-              a condition of treatment, or bill you for emergency care of the injured person. Show this
-              badge and Alert ID #{result.alertId.slice(-6)} if asked.
+              {t.legalBody} Show this badge and Alert ID #{result.alertId.slice(-6)} if asked.
             </p>
             <a
               href={`sms:112?body=${legalPassSms}`}
               className="mt-3 inline-flex items-center gap-2 bg-amber-700 hover:bg-amber-800 text-white text-sm font-semibold px-4 py-2 rounded-xl transition-colors"
             >
               <Send className="w-4 h-4" />
-              Save Legal Pass to SMS
+              {t.saveLegal}
             </a>
           </div>
         </div>
@@ -600,10 +719,11 @@ function PostDispatchConfirmation({
   );
 }
 
-function FirstAidGuidance({ type }: { type: EmergencyType }) {
+function FirstAidGuidance({ type, language }: { type: EmergencyType; language: Language }) {
   const category = EMERGENCY_CATEGORIES.find((c) => c.id === type)!;
   const Icon = category.icon;
-  const guidance = FIRST_AID_GUIDANCE[type];
+  const t = TRANSLATIONS[language];
+  const guidance = t.guidance[type];
 
   return (
     <section className="bg-neutral-900 border border-neutral-800 rounded-2xl p-4 animate-[fadeIn_0.4s_ease-out]">
@@ -611,10 +731,10 @@ function FirstAidGuidance({ type }: { type: EmergencyType }) {
         <div className={`${category.color} rounded-full p-2.5 animate-pulse`}>
           <Icon className="w-5 h-5 text-white" strokeWidth={2.5} />
         </div>
-        <h3 className="font-bold text-neutral-100">While You Wait: {category.label}</h3>
+        <h3 className="font-bold text-neutral-100">{t.whileWait}: {t.emergency[type]}</h3>
       </div>
       <ul className="space-y-2">
-        {guidance.steps.map((step, i) => (
+        {guidance.map((step, i) => (
           <li key={i} className="flex items-start gap-2 text-sm text-neutral-300">
             <span className="text-emerald-400 font-bold mt-0.5">{i + 1}.</span>
             <span>{step}</span>
@@ -628,15 +748,16 @@ function FirstAidGuidance({ type }: { type: EmergencyType }) {
 // ============================================================
 // Zero-Internet Fallback Card
 // ============================================================
-function ZeroInternetFallback({ smsBody }: { smsBody: string }) {
+function ZeroInternetFallback({ smsBody, language }: { smsBody: string; language: Language }) {
+  const t = TRANSLATIONS[language];
   return (
     <section className="bg-neutral-900 border-2 border-dashed border-neutral-700 rounded-2xl p-4">
       <h2 className="text-sm font-bold text-neutral-300 mb-1 flex items-center gap-2">
         <WifiOff className="w-4 h-4 text-amber-400" />
-        CONNECTION LOST — USE THESE DIRECTLY
+        {t.connectionLost}
       </h2>
       <p className="text-xs text-neutral-500 mb-3">
-        These use your mobile network directly and do not require this page to reach the dispatch server.
+        {t.directHint}
       </p>
       <div className="grid grid-cols-2 gap-3">
         <a
@@ -644,14 +765,14 @@ function ZeroInternetFallback({ smsBody }: { smsBody: string }) {
           className="bg-green-700 hover:bg-green-600 active:bg-green-800 rounded-xl p-4 flex flex-col items-center justify-center gap-2 text-white font-bold transition-colors"
         >
           <Phone className="w-7 h-7" />
-          <span className="text-sm">Call 112</span>
+          <span className="text-sm">{t.call}</span>
         </a>
         <a
           href={`sms:112?body=${smsBody}`}
           className="bg-blue-700 hover:bg-blue-600 active:bg-blue-800 rounded-xl p-4 flex flex-col items-center justify-center gap-2 text-white font-bold transition-colors"
         >
           <MessageSquare className="w-7 h-7" />
-          <span className="text-sm">SMS 112</span>
+          <span className="text-sm">{t.sms}</span>
         </a>
       </div>
     </section>
