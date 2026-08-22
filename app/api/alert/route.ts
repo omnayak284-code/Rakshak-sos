@@ -12,6 +12,7 @@ interface AlertPayload {
 }
 
 interface PlaceResult {
+  id: string;
   name: string;
   address: string;
   lat: number;
@@ -65,54 +66,104 @@ function estimateEtaMinutes(distanceKm: number): number {
 }
 
 // ---------- Live Google Places lookup ----------
+interface GooglePlace {
+  id?: string;
+  displayName?: { text?: string };
+  formattedAddress?: string;
+  location?: { latitude?: number; longitude?: number };
+  nationalPhoneNumber?: string;
+  internationalPhoneNumber?: string;
+  types?: string[];
+}
+
+function isExcludedPlace(name: string, placeType: 'hospital' | 'police'): boolean {
+  const excludedTerms = placeType === 'police'
+    ? ['signal', 'traffic', 'booth', 'kiosk', 'outpost', 'checkpoint', 'chowk']
+    : ['diagnostic', 'pathology', 'laboratory', ' lab', 'pharmacy', 'dental', 'eye clinic', 'clinic', 'scan center'];
+
+  return excludedTerms.some((term) => name.includes(term));
+}
+
+function isValidPlace(place: GooglePlace, placeType: 'hospital' | 'police'): boolean {
+  const name = (place.displayName?.text || '').toLowerCase();
+  const types = place.types || [];
+  if (place.location?.latitude == null || place.location.longitude == null || isExcludedPlace(name, placeType)) {
+    return false;
+  }
+
+  if (placeType === 'police') {
+    return types.includes('police') && (name.includes('police') || name.includes('thana') || name.includes('ps '));
+  }
+
+  return types.includes('hospital') || types.includes('general_hospital');
+}
+
 async function findNearestPlace(
   lat: number,
   lng: number,
   placeType: 'hospital' | 'police'
 ): Promise<{ place: PlaceResult; distanceKm: number } | null> {
-  const apiKey = process.env.GOOGLE_PLACES_API_KEY;
+  const apiKey = process.env.GOOGLE_PLACES_API_KEY || process.env.GOOGLE_MAPS_API_KEY;
   if (!apiKey) {
     console.error('GOOGLE_PLACES_API_KEY is missing');
     return null;
   }
 
   try {
-    const keyword = placeType === 'police' ? '&keyword=police%20station' : '';
-    const nearbyUrl = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lng}&rankby=distance&type=${placeType}${keyword}&key=${apiKey}`;
-    const nearbyRes = await fetch(nearbyUrl);
-    const nearbyData = await nearbyRes.json();
+    const searchText = placeType === 'police'
+      ? 'police station thana'
+      : 'hospital multi specialty trauma emergency care';
+    const response = await fetch('https://places.googleapis.com/v1/places:searchText', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Goog-Api-Key': apiKey,
+        'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.location,places.types,places.nationalPhoneNumber,places.internationalPhoneNumber',
+      },
+      body: JSON.stringify({
+        textQuery: searchText,
+        includedType: placeType,
+        locationBias: {
+          circle: {
+            center: { latitude: lat, longitude: lng },
+            radius: 15000,
+          },
+        },
+        maxResultCount: 5,
+      }),
+    });
+    const placesData: { places?: GooglePlace[]; error?: { message?: string } } = await response.json();
 
-    if (nearbyData.status !== 'OK' || !nearbyData.results?.length) {
-      console.error(`Places nearbysearch failed for ${placeType}:`, nearbyData.status);
+    if (!response.ok || !placesData.places?.length) {
+      console.error(`Places text search failed for ${placeType}:`, placesData.error?.message || response.status);
       return null;
     }
 
-    const top = nearbyData.results[0];
-    const placeLat = top.geometry.location.lat;
-    const placeLng = top.geometry.location.lng;
-    const distanceKm = haversineDistanceKm(lat, lng, placeLat, placeLng);
+    const top = placesData.places
+      .filter((place) => isValidPlace(place, placeType))
+      .sort((first, second) => {
+        const firstDistance = haversineDistanceKm(lat, lng, first.location!.latitude!, first.location!.longitude!);
+        const secondDistance = haversineDistanceKm(lat, lng, second.location!.latitude!, second.location!.longitude!);
+        return firstDistance - secondDistance;
+      })[0];
 
-    let phone = '';
-    let address = top.vicinity || '';
-    try {
-      const detailsUrl = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${top.place_id}&fields=formatted_phone_number,formatted_address&key=${apiKey}`;
-      const detailsRes = await fetch(detailsUrl);
-      const detailsData = await detailsRes.json();
-      if (detailsData.status === 'OK') {
-        phone = detailsData.result.formatted_phone_number || '';
-        address = detailsData.result.formatted_address || address;
-      }
-    } catch (err) {
-      console.error('Place details lookup failed:', err);
+    if (!top || top.location?.latitude == null || top.location.longitude == null) {
+      console.error(`No valid ${placeType} result returned by Google Places`);
+      return null;
     }
+
+    const placeLat = top.location.latitude;
+    const placeLng = top.location.longitude;
+    const distanceKm = haversineDistanceKm(lat, lng, placeLat, placeLng);
 
     return {
       place: {
-        name: top.name,
-        address,
+        id: top.id || `google-${placeType}`,
+        name: top.displayName?.text || `Nearest ${placeType}`,
+        address: top.formattedAddress || 'Address unavailable',
         lat: placeLat,
         lng: placeLng,
-        phone: phone.replace(/[\s()-]/g, '') || '+911000000000',
+        phone: (top.internationalPhoneNumber || top.nationalPhoneNumber || '').replace(/[\s()-]/g, '') || '+911000000000',
       },
       distanceKm,
     };
@@ -291,7 +342,7 @@ export async function POST(request: NextRequest) {
       emergencyType,
       victimCount,
       nearestHospital: {
-        id: 'hospital-live',
+        id: hospitalResult.place.id,
         name: hospitalResult.place.name,
         address: hospitalResult.place.address,
         lat: hospitalResult.place.lat,
@@ -303,7 +354,7 @@ export async function POST(request: NextRequest) {
         sms: hospSms,
       },
       nearestPolice: {
-        id: 'police-live',
+        id: policeResult.place.id,
         name: policeResult.place.name,
         address: policeResult.place.address,
         lat: policeResult.place.lat,
