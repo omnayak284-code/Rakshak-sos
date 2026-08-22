@@ -23,6 +23,8 @@ interface DispatchedUnit {
   id: string;
   name: string;
   address: string;
+  lat: number;
+  lng: number;
   type: string;
   distanceKm: number;
   etaMinutes: number;
@@ -75,7 +77,8 @@ async function findNearestPlace(
   }
 
   try {
-    const nearbyUrl = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lng}&rankby=distance&type=${placeType}&key=${apiKey}`;
+    const keyword = placeType === 'police' ? '&keyword=police%20station' : '';
+    const nearbyUrl = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lng}&rankby=distance&type=${placeType}${keyword}&key=${apiKey}`;
     const nearbyRes = await fetch(nearbyUrl);
     const nearbyData = await nearbyRes.json();
 
@@ -291,6 +294,8 @@ export async function POST(request: NextRequest) {
         id: 'hospital-live',
         name: hospitalResult.place.name,
         address: hospitalResult.place.address,
+        lat: hospitalResult.place.lat,
+        lng: hospitalResult.place.lng,
         type: 'hospital',
         distanceKm: Math.round(hospitalResult.distanceKm * 100) / 100,
         etaMinutes: hospitalEta,
@@ -301,6 +306,8 @@ export async function POST(request: NextRequest) {
         id: 'police-live',
         name: policeResult.place.name,
         address: policeResult.place.address,
+        lat: policeResult.place.lat,
+        lng: policeResult.place.lng,
         type: 'police',
         distanceKm: Math.round(policeResult.distanceKm * 100) / 100,
         etaMinutes: policeEta,

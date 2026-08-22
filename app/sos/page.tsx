@@ -111,6 +111,8 @@ interface DispatchedUnit {
   id: string;
   name: string;
   address: string;
+  lat: number;
+  lng: number;
   type: string;
   distanceKm: number;
   etaMinutes: number;
@@ -709,6 +711,7 @@ function PostDispatchConfirmation({
               <p className="text-xs font-bold uppercase tracking-wide text-emerald-200">Nearest Police Station</p>
               <p className="font-semibold">{result.nearestPolice.name}</p>
               <p className="text-emerald-100/80 text-xs mt-0.5">{result.nearestPolice.address}</p>
+              <p className="text-emerald-100/80 text-xs mt-0.5 font-mono">{result.nearestPolice.lat.toFixed(6)}, {result.nearestPolice.lng.toFixed(6)}</p>
               <p className="text-emerald-100 text-xs mt-1 font-medium">{result.nearestPolice.distanceKm} km away</p>
             </div>
           </div>
@@ -718,6 +721,7 @@ function PostDispatchConfirmation({
               <p className="text-xs font-bold uppercase tracking-wide text-emerald-200">Nearest Hospital</p>
               <p className="font-semibold">{result.nearestHospital.name}</p>
               <p className="text-emerald-100/80 text-xs mt-0.5">{result.nearestHospital.address}</p>
+              <p className="text-emerald-100/80 text-xs mt-0.5 font-mono">{result.nearestHospital.lat.toFixed(6)}, {result.nearestHospital.lng.toFixed(6)}</p>
               <p className="text-emerald-100 text-xs mt-1 font-medium">{result.nearestHospital.distanceKm} km away</p>
             </div>
           </div>
