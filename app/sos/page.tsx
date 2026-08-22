@@ -246,7 +246,7 @@ function SosContent() {
           setLocationError('Location access is off or was denied.');
           setLocationLoading(false);
         },
-        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+        { enableHighAccuracy: true, timeout: 5000, maximumAge: 60000 }
       );
     } else {
       setLocationError('Geolocation not supported on this device.');
@@ -279,7 +279,7 @@ function SosContent() {
         setLocationError('Location access is off or was denied.');
         setLocationLoading(false);
       },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      { enableHighAccuracy: true, timeout: 5000, maximumAge: 60000 }
     );
   }, []);
 
@@ -460,23 +460,6 @@ function SosContent() {
           </section>
         </div>
       )}
-      {!locationLoading && !coords && locationError && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/90 px-4" role="alertdialog" aria-modal="true">
-          <section className="w-full max-w-sm bg-neutral-900 border-2 border-amber-600 rounded-2xl p-6 text-center shadow-2xl">
-            <Navigation className="w-10 h-10 mx-auto mb-4 text-amber-400 animate-pulse" />
-            <h2 className="text-xl font-bold text-white">{t.gpsRequiredTitle}</h2>
-            <p className="text-sm text-neutral-300 mt-3 leading-relaxed">{t.gpsRequiredDesc}</p>
-            <p className="text-xs text-amber-300 mt-3">{t.gpsDenied}</p>
-            <button
-              type="button"
-              onClick={requestLocation}
-              className="w-full mt-5 rounded-xl bg-red-600 hover:bg-red-500 p-4 text-white font-bold"
-            >
-              {t.enableGps}
-            </button>
-          </section>
-        </div>
-      )}
       {/* Header */}
       <header className="sticky top-0 z-30 bg-neutral-950/95 backdrop-blur border-b border-neutral-800 px-4 py-3 flex items-center gap-2">
         <Siren className="w-6 h-6 text-red-500 flex-shrink-0" />
@@ -514,7 +497,7 @@ function SosContent() {
           </section>
         )}
 
-        {isOnline === true && coords && (
+        {isOnline !== false && (
           <>
             {/* Location Card */}
             <section className="bg-neutral-900 border border-neutral-800 rounded-2xl p-4">
@@ -545,7 +528,12 @@ function SosContent() {
                   {locationError && (
                     <div className="flex items-start gap-2 mt-2 text-sm text-amber-400">
                       <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                      <span>{locationError}</span>
+                      <div>
+                        <p>{locationError}</p>
+                        <button type="button" onClick={requestLocation} className="mt-2 font-semibold text-amber-300 underline">
+                          {t.enableGps}
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -714,7 +702,7 @@ function PostDispatchConfirmation({
 </div>
         <div className="mt-4 space-y-3">
           <p className="bg-red-900/50 rounded-xl p-3 text-sm font-bold text-red-100">
-            🚨 {t.priority}: {result.victimCount} {t.requested}
+            🚨 {t.priority}: {t.emergency[result.emergencyType as EmergencyType]} — {result.victimCount} {t.requested}
           </p>
           <div className="flex items-start gap-3 bg-emerald-700/30 rounded-xl p-3">
             <ShieldAlert className="w-5 h-5 text-emerald-100 flex-shrink-0 mt-0.5" />
@@ -740,18 +728,6 @@ function PostDispatchConfirmation({
                 <p className="text-amber-100/80 text-xs mt-0.5">{result.nearestFire.address}</p>
                 <p className="text-amber-100 text-xs mt-1 font-medium">
                   {result.nearestFire.distanceKm} km away — Fire brigade notified
-                </p>
-              </div>
-            </div>
-          )}
-          {result.nearestTraffic && (
-            <div className="flex items-start gap-3 bg-sky-700/30 rounded-xl p-3">
-              <span className="text-xl" aria-hidden="true">🚧</span>
-              <div className="text-sm text-sky-50 leading-snug">
-                <p className="font-semibold">Traffic Control: {result.nearestTraffic.name}</p>
-                <p className="text-sky-100/80 text-xs mt-0.5">{result.nearestTraffic.address}</p>
-                <p className="text-sky-100 text-xs mt-1 font-medium">
-                  {result.nearestTraffic.distanceKm} km away — Perimeter and diversion notified
                 </p>
               </div>
             </div>
@@ -995,10 +971,10 @@ function CprMetronome({ onClose }: { onClose: () => void }) {
 // ============================================================
 function SosLoadingFallback() {
   return (
-    <div className="min-h-screen bg-neutral-950 text-white flex items-center justify-center">
+    <div className="min-h-screen bg-red-950 text-white flex items-center justify-center">
       <div className="flex flex-col items-center gap-3">
         <Loader2 className="w-10 h-10 text-red-500 animate-spin" />
-        <p className="text-neutral-400 text-sm">Loading Rakshak SOS...</p>
+        <p className="text-red-100 text-sm font-semibold">Rakshak SOS is loading...</p>
       </div>
     </div>
   );

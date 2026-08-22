@@ -6,7 +6,8 @@ interface AlertPayload {
   km_id: string;
   lat: number;
   lng: number;
-  emergencyType: 'severe_bleeding' | 'unconscious' | 'trapped_vehicle' | 'vehicle_fire';
+  emergencyType: 'severe_bleeding' | 'unconscious_no_breathing' | 'trapped_vehicle' | 'vehicle_fire';
+  victimCount: '1 Person' | '2–3 People' | '4+ (Mass Casualty)';
   bystanderPhone?: string;
 }
 
@@ -34,6 +35,7 @@ interface DispatchResult {
   alertId: string;
   km_id: string;
   emergencyType: string;
+  victimCount: AlertPayload['victimCount'];
   nearestHospital: DispatchedUnit;
   nearestPolice: DispatchedUnit;
   timestamp: string;
@@ -197,7 +199,7 @@ function validatePayload(body: any): { valid: boolean; error?: string; payload?:
   if (!body || typeof body !== 'object') {
     return { valid: false, error: 'Invalid request body' };
   }
-  const { km_id, lat, lng, emergencyType, bystanderPhone } = body;
+  const { km_id, lat, lng, emergencyType, victimCount, bystanderPhone } = body;
 
   if (typeof km_id !== 'string' || km_id.trim().length === 0) {
     return { valid: false, error: 'km_id is required and must be a string' };
@@ -211,10 +213,14 @@ function validatePayload(body: any): { valid: boolean; error?: string; payload?:
     return { valid: false, error: 'lng is required and must be a valid longitude' };
   }
   const validTypes: AlertPayload['emergencyType'][] = [
-    'severe_bleeding', 'unconscious', 'trapped_vehicle', 'vehicle_fire',
+    'severe_bleeding', 'unconscious_no_breathing', 'trapped_vehicle', 'vehicle_fire',
   ];
   if (!validTypes.includes(emergencyType)) {
     return { valid: false, error: `emergencyType must be one of: ${validTypes.join(', ')}` };
+  }
+  const validVictimCounts: AlertPayload['victimCount'][] = ['1 Person', '2–3 People', '4+ (Mass Casualty)'];
+  if (!validVictimCounts.includes(victimCount)) {
+    return { valid: false, error: `victimCount must be one of: ${validVictimCounts.join(', ')}` };
   }
   if (bystanderPhone !== undefined && typeof bystanderPhone !== 'string') {
     return { valid: false, error: 'bystanderPhone must be a string if provided' };
@@ -222,7 +228,7 @@ function validatePayload(body: any): { valid: boolean; error?: string; payload?:
   return {
     valid: true,
     payload: {
-      km_id: km_id.trim(), lat: latNum, lng: lngNum, emergencyType,
+      km_id: km_id.trim(), lat: latNum, lng: lngNum, emergencyType, victimCount,
       bystanderPhone: bystanderPhone || undefined,
     },
   };
@@ -238,7 +244,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: validation.error || 'Invalid payload' }, { status: 400 });
     }
 
-    const { km_id, lat, lng, emergencyType, bystanderPhone } = validation.payload;
+    const { km_id, lat, lng, emergencyType, victimCount, bystanderPhone } = validation.payload;
 
     const [hospitalResult, policeResult] = await Promise.all([
       findNearestPlace(lat, lng, 'hospital'),
@@ -259,8 +265,8 @@ export async function POST(request: NextRequest) {
     const hospitalEta = estimateEtaMinutes(hospitalResult.distanceKm);
     const policeEta = estimateEtaMinutes(policeResult.distanceKm);
 
-    const hospitalMessage = `RAKSHAK SOS ALERT [${alertId}]. Type: ${emergencyLabel}. Highway KM ${km_id}. Location: ${locationLink}. Distance: ${hospitalResult.distanceKm.toFixed(2)} km. ETA ${hospitalEta} min. Respond immediately.`;
-    const policeMessage = `RAKSHAK SOS ALERT [${alertId}]. Type: ${emergencyLabel}. Highway KM ${km_id}. Location: ${locationLink}. Distance: ${policeResult.distanceKm.toFixed(2)} km. ETA ${policeEta} min. Respond immediately.`;
+    const hospitalMessage = `RAKSHAK SOS ALERT [${alertId}]. Type: ${emergencyLabel}. Casualties: ${victimCount}. Highway KM ${km_id}. Location: ${locationLink}. Distance: ${hospitalResult.distanceKm.toFixed(2)} km. ETA ${hospitalEta} min. Respond immediately.`;
+    const policeMessage = `RAKSHAK SOS ALERT [${alertId}]. Type: ${emergencyLabel}. Casualties: ${victimCount}. Highway KM ${km_id}. Location: ${locationLink}. Distance: ${policeResult.distanceKm.toFixed(2)} km. ETA ${policeEta} min. Respond immediately.`;
 
     const [hospCall, hospSms, polCall, polSms] = await Promise.all([
       dispatchCall(hospitalResult.place.phone, hospitalMessage),
@@ -280,6 +286,7 @@ export async function POST(request: NextRequest) {
       alertId,
       km_id,
       emergencyType,
+      victimCount,
       nearestHospital: {
         id: 'hospital-live',
         name: hospitalResult.place.name,
