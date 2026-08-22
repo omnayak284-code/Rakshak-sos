@@ -1,25 +1,21 @@
 // app/api/alert/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { EmergencyFacility, fetchNearestFacilities } from '@/lib/emergencyService';
 
 // ---------- Types ----------
 interface AlertPayload {
   km_id: string;
   lat: number;
   lng: number;
-  emergencyType: 'severe_bleeding' | 'unconscious_no_breathing' | 'trapped_vehicle' | 'vehicle_fire';
-  victimCount: '1 Person' | '2–3 People' | '4+ (Mass Casualty)';
+  emergencyType: 'severe_bleeding' | 'unconscious' | 'trapped_vehicle' | 'vehicle_fire';
   bystanderPhone?: string;
 }
 
-interface EmergencyUnit {
-  id: string;
+interface PlaceResult {
   name: string;
   address: string;
-  type: 'hospital' | 'police' | 'fire' | 'traffic' | 'ambulance';
   lat: number;
   lng: number;
-  phone?: string;
+  phone: string;
 }
 
 interface DispatchedUnit {
@@ -38,26 +34,10 @@ interface DispatchResult {
   alertId: string;
   km_id: string;
   emergencyType: string;
-  victimCount: AlertPayload['victimCount'];
   nearestHospital: DispatchedUnit;
   nearestPolice: DispatchedUnit;
-  nearestFire?: DispatchedUnit;
-  nearestTraffic?: DispatchedUnit;
   timestamp: string;
 }
-
-// ---------- In-memory dataset (mock highway units) ----------
-const EMERGENCY_UNITS: EmergencyUnit[] = [
-  { id: 'HOSP-001', name: 'Apollo Hospitals, Bhubaneswar', address: 'Gajapati Nagar, Bhubaneswar', type: 'hospital', lat: 20.3064, lng: 85.8322, phone: '+918069049752' },
-  { id: 'HOSP-002', name: 'Kalinga Institute of Medical Sciences (KIMS)', address: 'KIIT Campus, Chandaka Industrial Estate, Bhubaneswar', type: 'hospital', lat: 20.3534, lng: 85.8154, phone: '+916747111000' },
-  { id: 'HOSP-003', name: 'CARE Hospitals, Bhubaneswar', address: 'District Center, Chandrasekharpur, Bhubaneswar', type: 'hospital', lat: 20.3213, lng: 85.8203, phone: '+914068106589' },
-  { id: 'HOSP-004', name: 'Utkal Hospital', address: 'Defence Colony, Bhubaneswar', type: 'hospital', lat: 20.32277, lng: 85.80049, phone: '+916370704001' },
-  { id: 'POLICE-001', name: 'Police Commissionerate Office, Bhubaneswar', address: 'Bhubaneswar, Odisha', type: 'police', lat: 20.274694, lng: 85.825917, phone: '+916742530035' },
-  { id: 'POLICE-002', name: 'Special Crime Unit Police Station, Nayapalli', address: 'Nayapalli, Bhubaneswar', type: 'police', lat: 20.290579, lng: 85.815449, phone: '+916742556668' },
-  { id: 'POLICE-003', name: 'Infocity Police Station', address: 'Infocity, Bhubaneswar', type: 'police', lat: 20.3546, lng: 85.8091, phone: '+916742725700' },
-  { id: 'FIRE-001', name: 'District Fire & Rescue Brigade', address: 'Fire Station Road, Bhubaneswar', type: 'fire', lat: 20.301, lng: 85.82, phone: '+917777777777' },
-  { id: 'TRAFFIC-001', name: 'Highway Traffic Control Command', address: 'Highway Control Center, Bhubaneswar', type: 'traffic', lat: 20.285, lng: 85.835, phone: '+916666666666' },
-];
 
 // ---------- Haversine distance ----------
 function toRad(deg: number): number {
@@ -80,37 +60,70 @@ function estimateEtaMinutes(distanceKm: number): number {
   return Math.max(3, Math.round(travelMinutes + 2));
 }
 
-function findNearestByType(lat: number, lng: number, type: EmergencyUnit['type']) {
-  const candidates = EMERGENCY_UNITS.filter((u) => u.type === type).map((unit) => ({
-    unit,
-    distanceKm: haversineDistanceKm(lat, lng, unit.lat, unit.lng),
-  }));
-  candidates.sort((a, b) => a.distanceKm - b.distanceKm);
-  return candidates[0];
-}
+// ---------- Live Google Places lookup ----------
+async function findNearestPlace(
+  lat: number,
+  lng: number,
+  placeType: 'hospital' | 'police'
+): Promise<{ place: PlaceResult; distanceKm: number } | null> {
+  const apiKey = process.env.GOOGLE_PLACES_API_KEY;
+  if (!apiKey) {
+    console.error('GOOGLE_PLACES_API_KEY is missing');
+    return null;
+  }
 
-function facilityToMatch(facility: EmergencyFacility): { unit: EmergencyUnit; distanceKm: number } {
-  return {
-    unit: {
-      id: `OSM-${facility.type}-${facility.lat}-${facility.lng}`,
-      name: facility.name,
-      address: facility.address,
-      type: facility.type === 'fire_station' ? 'fire' : facility.type,
-      lat: facility.lat,
-      lng: facility.lng,
-      phone: facility.phone,
-    },
-    distanceKm: facility.distanceKm,
-  };
+  try {
+    const nearbyUrl = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lng}&rankby=distance&type=${placeType}&key=${apiKey}`;
+    const nearbyRes = await fetch(nearbyUrl);
+    const nearbyData = await nearbyRes.json();
+
+    if (nearbyData.status !== 'OK' || !nearbyData.results?.length) {
+      console.error(`Places nearbysearch failed for ${placeType}:`, nearbyData.status);
+      return null;
+    }
+
+    const top = nearbyData.results[0];
+    const placeLat = top.geometry.location.lat;
+    const placeLng = top.geometry.location.lng;
+    const distanceKm = haversineDistanceKm(lat, lng, placeLat, placeLng);
+
+    let phone = '';
+    let address = top.vicinity || '';
+    try {
+      const detailsUrl = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${top.place_id}&fields=formatted_phone_number,formatted_address&key=${apiKey}`;
+      const detailsRes = await fetch(detailsUrl);
+      const detailsData = await detailsRes.json();
+      if (detailsData.status === 'OK') {
+        phone = detailsData.result.formatted_phone_number || '';
+        address = detailsData.result.formatted_address || address;
+      }
+    } catch (err) {
+      console.error('Place details lookup failed:', err);
+    }
+
+    return {
+      place: {
+        name: top.name,
+        address,
+        lat: placeLat,
+        lng: placeLng,
+        phone: phone.replace(/[\s()-]/g, '') || '+911000000000',
+      },
+      distanceKm,
+    };
+  } catch (err) {
+    console.error(`Places API error for ${placeType}:`, err);
+    return null;
+  }
 }
 
 // ---------- Twilio dispatch (mock-safe) ----------
-async function dispatchCall(phone: string | undefined, message: string): Promise<{ status: string; sid?: string; mode: 'live' | 'mock' }> {
+async function dispatchCall(phone: string, message: string): Promise<{ status: string; sid?: string; mode: 'live' | 'mock' }> {
   const accountSid = process.env.TWILIO_ACCOUNT_SID;
   const authToken = process.env.TWILIO_AUTH_TOKEN;
   const fromNumber = process.env.TWILIO_FROM_NUMBER;
 
-  if (!phone || !accountSid || !authToken || !fromNumber) {
+  if (!accountSid || !authToken || !fromNumber) {
     console.log(`[MOCK CALL] To: ${phone} | Message: ${message}`);
     return { status: 'simulated', mode: 'mock' };
   }
@@ -144,12 +157,12 @@ async function dispatchCall(phone: string | undefined, message: string): Promise
   }
 }
 
-async function dispatchSms(phone: string | undefined, message: string): Promise<{ status: string; sid?: string; mode: 'live' | 'mock' }> {
+async function dispatchSms(phone: string, message: string): Promise<{ status: string; sid?: string; mode: 'live' | 'mock' }> {
   const accountSid = process.env.TWILIO_ACCOUNT_SID;
   const authToken = process.env.TWILIO_AUTH_TOKEN;
   const fromNumber = process.env.TWILIO_FROM_NUMBER;
 
-  if (!phone || !accountSid || !authToken || !fromNumber) {
+  if (!accountSid || !authToken || !fromNumber) {
     console.log(`[MOCK SMS] To: ${phone} | Message: ${message}`);
     return { status: 'simulated', mode: 'mock' };
   }
@@ -184,7 +197,7 @@ function validatePayload(body: any): { valid: boolean; error?: string; payload?:
   if (!body || typeof body !== 'object') {
     return { valid: false, error: 'Invalid request body' };
   }
-  const { km_id, lat, lng, emergencyType, victimCount, bystanderPhone } = body;
+  const { km_id, lat, lng, emergencyType, bystanderPhone } = body;
 
   if (typeof km_id !== 'string' || km_id.trim().length === 0) {
     return { valid: false, error: 'km_id is required and must be a string' };
@@ -198,14 +211,10 @@ function validatePayload(body: any): { valid: boolean; error?: string; payload?:
     return { valid: false, error: 'lng is required and must be a valid longitude' };
   }
   const validTypes: AlertPayload['emergencyType'][] = [
-    'severe_bleeding', 'unconscious_no_breathing', 'trapped_vehicle', 'vehicle_fire',
+    'severe_bleeding', 'unconscious', 'trapped_vehicle', 'vehicle_fire',
   ];
   if (!validTypes.includes(emergencyType)) {
     return { valid: false, error: `emergencyType must be one of: ${validTypes.join(', ')}` };
-  }
-  const validVictimCounts: AlertPayload['victimCount'][] = ['1 Person', '2–3 People', '4+ (Mass Casualty)'];
-  if (!validVictimCounts.includes(victimCount)) {
-    return { valid: false, error: `victimCount must be one of: ${validVictimCounts.join(', ')}` };
   }
   if (bystanderPhone !== undefined && typeof bystanderPhone !== 'string') {
     return { valid: false, error: 'bystanderPhone must be a string if provided' };
@@ -213,7 +222,7 @@ function validatePayload(body: any): { valid: boolean; error?: string; payload?:
   return {
     valid: true,
     payload: {
-      km_id: km_id.trim(), lat: latNum, lng: lngNum, emergencyType, victimCount,
+      km_id: km_id.trim(), lat: latNum, lng: lngNum, emergencyType,
       bystanderPhone: bystanderPhone || undefined,
     },
   };
@@ -229,66 +238,40 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: validation.error || 'Invalid payload' }, { status: 400 });
     }
 
-    const { km_id, lat, lng, emergencyType, victimCount, bystanderPhone } = validation.payload;
+    const { km_id, lat, lng, emergencyType, bystanderPhone } = validation.payload;
 
-    let nearestHospitalMatch = findNearestByType(lat, lng, 'hospital');
-    let nearestPoliceMatch = findNearestByType(lat, lng, 'police');
-    const needsSpecialResponse = emergencyType === 'trapped_vehicle' || emergencyType === 'vehicle_fire';
-    let nearestFireMatch = needsSpecialResponse ? findNearestByType(lat, lng, 'fire') : undefined;
-    let nearestTrafficMatch = needsSpecialResponse ? findNearestByType(lat, lng, 'traffic') : undefined;
+    const [hospitalResult, policeResult] = await Promise.all([
+      findNearestPlace(lat, lng, 'hospital'),
+      findNearestPlace(lat, lng, 'police'),
+    ]);
 
-    try {
-      const facilities = await fetchNearestFacilities(lat, lng);
-      if (facilities.hospital) nearestHospitalMatch = facilityToMatch(facilities.hospital);
-      if (facilities.police) nearestPoliceMatch = facilityToMatch(facilities.police);
-      if (needsSpecialResponse && facilities.fireStation) {
-        nearestFireMatch = facilityToMatch(facilities.fireStation);
-      }
-      if (needsSpecialResponse && facilities.trafficControl) {
-        nearestTrafficMatch = facilityToMatch(facilities.trafficControl);
-      }
-    } catch (error) {
-      console.warn('Overpass lookup failed; using local emergency facility fallback:', error);
-    }
-
-    if (!nearestHospitalMatch || !nearestPoliceMatch || (needsSpecialResponse && (!nearestFireMatch || !nearestTrafficMatch))) {
-      return NextResponse.json({ success: false, error: 'No emergency units available in dataset' }, { status: 500 });
+    if (!hospitalResult || !policeResult) {
+      return NextResponse.json(
+        { success: false, error: 'Unable to locate nearby emergency units live. Please call 112 directly.' },
+        { status: 503 }
+      );
     }
 
     const alertId = `RKS-${Date.now()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
     const emergencyLabel = emergencyType.replace(/_/g, ' ').toUpperCase();
     const locationLink = `https://maps.google.com/?q=${lat},${lng}`;
 
-    const hospitalEta = estimateEtaMinutes(nearestHospitalMatch.distanceKm);
-    const policeEta = estimateEtaMinutes(nearestPoliceMatch.distanceKm);
+    const hospitalEta = estimateEtaMinutes(hospitalResult.distanceKm);
+    const policeEta = estimateEtaMinutes(policeResult.distanceKm);
 
-    const hospitalMessage = `RAKSHAK SOS ALERT [${alertId}]. Type: ${emergencyLabel}. Estimated Victims: ${victimCount}. Highway KM ${km_id}. Location: ${locationLink}. Distance: ${nearestHospitalMatch.distanceKm.toFixed(2)} km. ETA ${hospitalEta} min. Respond immediately.`;
-    const policeMessage = `RAKSHAK SOS ALERT [${alertId}]. Type: ${emergencyLabel}. Estimated Victims: ${victimCount}. Highway KM ${km_id}. Location: ${locationLink}. Distance: ${nearestPoliceMatch.distanceKm.toFixed(2)} km. ETA ${policeEta} min. Respond immediately.`;
-    const specialMessage = emergencyType === 'trapped_vehicle'
-      ? `${hospitalMessage} CRITICAL: Victims may be trapped inside the vehicle. Send hydraulic cutters and extrication rescue.`
-      : `${hospitalMessage} CRITICAL: Active vehicle fire or hazard. Send fire tenders and secure the perimeter with traffic diversion.`;
+    const hospitalMessage = `RAKSHAK SOS ALERT [${alertId}]. Type: ${emergencyLabel}. Highway KM ${km_id}. Location: ${locationLink}. Distance: ${hospitalResult.distanceKm.toFixed(2)} km. ETA ${hospitalEta} min. Respond immediately.`;
+    const policeMessage = `RAKSHAK SOS ALERT [${alertId}]. Type: ${emergencyLabel}. Highway KM ${km_id}. Location: ${locationLink}. Distance: ${policeResult.distanceKm.toFixed(2)} km. ETA ${policeEta} min. Respond immediately.`;
 
-    const dispatchPromises = [
-      dispatchCall(nearestHospitalMatch.unit.phone, hospitalMessage),
-      dispatchSms(nearestHospitalMatch.unit.phone, hospitalMessage),
-      dispatchCall(nearestPoliceMatch.unit.phone, policeMessage),
-      dispatchSms(nearestPoliceMatch.unit.phone, policeMessage),
-    ];
-    if (needsSpecialResponse && nearestFireMatch && nearestTrafficMatch) {
-      const fireMessage = specialMessage.replace(hospitalMessage, `${hospitalMessage} Fire & Rescue notification.`);
-      const trafficMessage = `${policeMessage} Traffic Control notification: secure the perimeter and divert highway traffic.`;
-      dispatchPromises.push(
-        dispatchCall(nearestFireMatch.unit.phone, fireMessage),
-        dispatchSms(nearestFireMatch.unit.phone, fireMessage),
-        dispatchCall(nearestTrafficMatch.unit.phone, trafficMessage),
-        dispatchSms(nearestTrafficMatch.unit.phone, trafficMessage),
-      );
-    }
-    const dispatchResults = await Promise.all(dispatchPromises);
-    const [hospCall, hospSms, polCall, polSms, fireCall, fireSms, trafficCall, trafficSms] = dispatchResults;
+    const [hospCall, hospSms, polCall, polSms] = await Promise.all([
+      dispatchCall(hospitalResult.place.phone, hospitalMessage),
+      dispatchSms(hospitalResult.place.phone, hospitalMessage),
+      dispatchCall(policeResult.place.phone, policeMessage),
+      dispatchSms(policeResult.place.phone, policeMessage),
+    ]);
 
     if (bystanderPhone) {
-      const bystanderMessage = `Rakshak SOS: Alert ${alertId} dispatched for ${victimCount}. Hospital: ${nearestHospitalMatch.unit.name} (${hospitalEta} min). Police: ${nearestPoliceMatch.unit.name} (${policeEta} min). Dial 112 if situation worsens.`;
+      const shortAlertId = alertId.slice(-6).toUpperCase();
+      const bystanderMessage = `RAKSHAK SOS — Alert ${alertId} dispatched. Hospital: ${hospitalResult.place.name} (${hospitalEta} min). Police: ${policeResult.place.name} (${policeEta} min).\n\nGOOD SAMARITAN DIGITAL SHIELD: Under Section 134A of the Motor Vehicles Act, 1988 and MoRTH Good Samaritan guidelines, you are protected from civil and criminal liability for helping. Police and hospitals cannot detain you, force a statement, or bill you for the injured person's care. Show this message and Alert ID #${shortAlertId} if asked.\n\nDial 112 if situation worsens.`;
       dispatchSms(bystanderPhone, bystanderMessage).catch((err) => console.error('Bystander SMS failed:', err));
     }
 
@@ -297,51 +280,26 @@ export async function POST(request: NextRequest) {
       alertId,
       km_id,
       emergencyType,
-      victimCount,
       nearestHospital: {
-        id: nearestHospitalMatch.unit.id,
-        name: nearestHospitalMatch.unit.name,
-        address: nearestHospitalMatch.unit.address,
-        type: nearestHospitalMatch.unit.type,
-        distanceKm: Math.round(nearestHospitalMatch.distanceKm * 100) / 100,
+        id: 'hospital-live',
+        name: hospitalResult.place.name,
+        address: hospitalResult.place.address,
+        type: 'hospital',
+        distanceKm: Math.round(hospitalResult.distanceKm * 100) / 100,
         etaMinutes: hospitalEta,
         call: hospCall,
         sms: hospSms,
       },
       nearestPolice: {
-        id: nearestPoliceMatch.unit.id,
-        name: nearestPoliceMatch.unit.name,
-        address: nearestPoliceMatch.unit.address,
-        type: nearestPoliceMatch.unit.type,
-        distanceKm: Math.round(nearestPoliceMatch.distanceKm * 100) / 100,
+        id: 'police-live',
+        name: policeResult.place.name,
+        address: policeResult.place.address,
+        type: 'police',
+        distanceKm: Math.round(policeResult.distanceKm * 100) / 100,
         etaMinutes: policeEta,
         call: polCall,
         sms: polSms,
       },
-      ...(needsSpecialResponse && nearestFireMatch && nearestTrafficMatch
-        ? {
-            nearestFire: {
-              id: nearestFireMatch.unit.id,
-              name: nearestFireMatch.unit.name,
-              address: nearestFireMatch.unit.address,
-              type: nearestFireMatch.unit.type,
-              distanceKm: Math.round(nearestFireMatch.distanceKm * 100) / 100,
-              etaMinutes: estimateEtaMinutes(nearestFireMatch.distanceKm),
-              call: fireCall,
-              sms: fireSms,
-            },
-            nearestTraffic: {
-              id: nearestTrafficMatch.unit.id,
-              name: nearestTrafficMatch.unit.name,
-              address: nearestTrafficMatch.unit.address,
-              type: nearestTrafficMatch.unit.type,
-              distanceKm: Math.round(nearestTrafficMatch.distanceKm * 100) / 100,
-              etaMinutes: estimateEtaMinutes(nearestTrafficMatch.distanceKm),
-              call: trafficCall,
-              sms: trafficSms,
-            },
-          }
-        : {}),
       timestamp: new Date().toISOString(),
     };
 
@@ -356,8 +314,7 @@ export async function GET() {
   return NextResponse.json(
     {
       status: 'ok',
-      service: 'Rakshak SOS Alert Dispatch API',
-      unitsRegistered: EMERGENCY_UNITS.length,
+      service: 'Rakshak SOS Alert Dispatch API (live Places lookup)',
       mode: process.env.TWILIO_ACCOUNT_SID ? 'live' : 'mock',
     },
     { status: 200 }
