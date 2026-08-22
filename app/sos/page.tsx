@@ -127,7 +127,6 @@ interface DispatchResponse {
   nearestHospital: DispatchedUnit;
   nearestPolice: DispatchedUnit;
   nearestFire?: DispatchedUnit;
-  nearestTraffic?: DispatchedUnit;
   timestamp: string;
 }
 
@@ -707,6 +706,7 @@ function PostDispatchConfirmation({
           <div className="flex items-start gap-3 bg-emerald-700/30 rounded-xl p-3">
             <ShieldAlert className="w-5 h-5 text-emerald-100 flex-shrink-0 mt-0.5" />
             <div className="text-sm text-emerald-50 leading-snug">
+              <p className="text-xs font-bold uppercase tracking-wide text-emerald-200">Nearest Police Station</p>
               <p className="font-semibold">{result.nearestPolice.name}</p>
               <p className="text-emerald-100/80 text-xs mt-0.5">{result.nearestPolice.address}</p>
               <p className="text-emerald-100 text-xs mt-1 font-medium">{result.nearestPolice.distanceKm} km away</p>
@@ -715,6 +715,7 @@ function PostDispatchConfirmation({
           <div className="flex items-start gap-3 bg-emerald-700/30 rounded-xl p-3">
             <Hospital className="w-5 h-5 text-emerald-100 flex-shrink-0 mt-0.5" />
             <div className="text-sm text-emerald-50 leading-snug">
+              <p className="text-xs font-bold uppercase tracking-wide text-emerald-200">Nearest Hospital</p>
               <p className="font-semibold">{result.nearestHospital.name}</p>
               <p className="text-emerald-100/80 text-xs mt-0.5">{result.nearestHospital.address}</p>
               <p className="text-emerald-100 text-xs mt-1 font-medium">{result.nearestHospital.distanceKm} km away</p>
