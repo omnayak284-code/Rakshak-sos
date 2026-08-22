@@ -113,33 +113,36 @@ async function findNearestPlace(
     const searchText = placeType === 'police'
       ? 'police station thana'
       : 'hospital multi specialty trauma emergency care';
-    const response = await fetch('https://places.googleapis.com/v1/places:searchText', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Goog-Api-Key': apiKey,
-        'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.location,places.types,places.nationalPhoneNumber,places.internationalPhoneNumber',
-      },
-      body: JSON.stringify({
-        textQuery: searchText,
-        includedType: placeType,
-        locationBias: {
-          circle: {
-            center: { latitude: lat, longitude: lng },
-            radius: 15000,
-          },
+    const searchPlaces = async (includedType?: 'hospital' | 'police') => {
+      const response = await fetch('https://places.googleapis.com/v1/places:searchText', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Goog-Api-Key': apiKey,
+          'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.location,places.types,places.nationalPhoneNumber,places.internationalPhoneNumber',
         },
-        maxResultCount: 5,
-      }),
-    });
-    const placesData: { places?: GooglePlace[]; error?: { message?: string } } = await response.json();
+        body: JSON.stringify({
+          textQuery: searchText,
+          ...(includedType ? { includedType } : {}),
+          locationBias: {
+            circle: {
+              center: { latitude: lat, longitude: lng },
+              radius: 15000,
+            },
+          },
+          maxResultCount: 5,
+        }),
+      });
+      const data: { places?: GooglePlace[]; error?: { message?: string } } = await response.json();
+      if (!response.ok) {
+        console.error(`Places text search failed for ${placeType}:`, data.error?.message || response.status);
+      }
+      return data.places || [];
+    };
 
-    if (!response.ok || !placesData.places?.length) {
-      console.error(`Places text search failed for ${placeType}:`, placesData.error?.message || response.status);
-      return null;
-    }
-
-    const top = placesData.places
+    const strictPlaces = await searchPlaces(placeType);
+    const places = strictPlaces.length > 0 ? strictPlaces : await searchPlaces();
+    const top = places
       .filter((place) => isValidPlace(place, placeType))
       .sort((first, second) => {
         const firstDistance = haversineDistanceKm(lat, lng, first.location!.latitude!, first.location!.longitude!);

@@ -316,13 +316,14 @@ function SosContent() {
         const data: DispatchResponse = await res.json();
 
         if (!res.ok || !data.success) {
-          throw new Error((data as any).error || 'Dispatch failed');
+          throw new Error((data as any).error || `Dispatch failed (${res.status})`);
         }
 
         setDispatchResult(data);
       } catch (err) {
         console.error('Dispatch error:', err);
-        setDispatchError('Failed to reach dispatch server. Use the emergency call/SMS buttons below immediately.');
+        const message = err instanceof Error ? err.message : 'Failed to reach dispatch server';
+        setDispatchError(`${message}. Use the emergency call/SMS buttons below immediately.`);
       } finally {
         setDispatching(false);
       }
