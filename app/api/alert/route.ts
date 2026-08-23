@@ -65,38 +65,29 @@ function estimateEtaMinutes(distanceKm: number): number {
   return Math.max(3, Math.round(travelMinutes + 2));
 }
 
-// ---------- Live Google Places lookup ----------
-interface GooglePlace {
-  place_id?: string;
-  name?: string;
-  vicinity?: string;
-  formatted_address?: string;
-  geometry?: { location?: { lat?: number; lng?: number } };
-  types?: string[];
-}
+// ---------- Keyless Photon / OpenStreetMap lookup ----------
+const NON_EMERGENCY_MEDICAL_KEYWORDS = [
+  'diagnostic', 'pathology', 'lab', 'laboratory', 'scan', 'imaging', 'x-ray', 'mri',
+  'ultrasound', 'blood bank', 'dental', 'dentist', 'eye care', 'optical', 'optician',
+  'ayurvedic', 'homeo', 'physiotherapy', 'pharmacy', 'chemist', 'skin clinic', 'cosmetic',
+];
 
-function isExcludedPlace(name: string, placeType: 'hospital' | 'police'): boolean {
-  const excludedTerms = placeType === 'police'
-    ? ['signal', 'traffic', 'booth', 'kiosk', 'outpost', 'checkpoint', 'chowk']
-    : ['diagnostic', 'pathology', 'laboratory', ' lab', 'pharmacy', 'dental', 'eye clinic', 'clinic', 'scan center'];
+const NON_POLICE_STATION_KEYWORDS = [
+  'signal', 'traffic signal', 'traffic booth', 'outpost', 'beat house', 'check post', 'kiosk', 'chowk',
+];
 
-  return excludedTerms.some((term) => name.includes(term));
-}
-
-function isValidPlace(place: GooglePlace, placeType: 'hospital' | 'police'): boolean {
-  const name = (place.name || '').toLowerCase();
-  const types = place.types || [];
-  if (place.geometry?.location?.lat == null || place.geometry.location.lng == null || isExcludedPlace(name, placeType)) {
-    return false;
-  }
-
-  if (placeType === 'police') {
-    const isNamedPoliceStation = name.includes('police') || name.includes('thana') || name.startsWith('ps ') || name.includes(' ps ');
-    return isNamedPoliceStation || types.includes('police');
-  }
-
-  const isNamedHospital = name.includes('hospital') || name.includes('medical center') || name.includes('medical college') || name.includes('emergency care');
-  return isNamedHospital || types.includes('hospital') || types.includes('general_hospital');
+interface PhotonFeature {
+  geometry?: { coordinates?: [number, number] };
+  properties?: {
+    osm_id?: number;
+    name?: string;
+    street?: string;
+    district?: string;
+    suburb?: string;
+    city?: string;
+    county?: string;
+    state?: string;
+  };
 }
 
 async function findNearestPlace(
@@ -104,68 +95,68 @@ async function findNearestPlace(
   lng: number,
   placeType: 'hospital' | 'police'
 ): Promise<{ place: PlaceResult; distanceKm: number } | null> {
-  const apiKey = process.env.GOOGLE_PLACES_API_KEY || process.env.GOOGLE_MAPS_API_KEY;
-  if (!apiKey) {
-    console.error('GOOGLE_PLACES_API_KEY is missing');
-    return null;
-  }
-
   try {
-    const nearbyUrl = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lng}&rankby=distance&type=${placeType}&keyword=${encodeURIComponent(placeType === 'police' ? 'police station thana' : 'hospital emergency')}&key=${apiKey}`;
-    const response = await fetch(nearbyUrl, { cache: 'no-store' });
-    const data: { status?: string; results?: GooglePlace[]; error_message?: string } = await response.json();
-    if (!response.ok || !data.results?.length || !['OK', 'ZERO_RESULTS'].includes(data.status || '')) {
-      console.error(`Places nearby search failed for ${placeType}:`, data.error_message || data.status || response.status);
+    const osmTag = placeType === 'police' ? 'amenity:police' : 'amenity:hospital';
+    const searchQuery = placeType === 'police' ? 'police station thana' : 'hospital trauma care emergency';
+    const url = `https://photon.komoot.io/api/?q=${encodeURIComponent(searchQuery)}&lat=${lat}&lon=${lng}&osm_tag=${encodeURIComponent(osmTag)}&limit=15`;
+    const response = await fetch(url, {
+      headers: { 'User-Agent': 'RakshakSOS-App' },
+      cache: 'no-store',
+    });
+    const data: { features?: PhotonFeature[] } = await response.json();
+    if (!response.ok || !data.features?.length) {
+      console.error(`Photon lookup failed for ${placeType}:`, response.status);
       return null;
     }
 
-    const places = data.results;
-    const top = places
-      .filter((place) => isValidPlace(place, placeType))
+    const candidates = data.features
+      .map((feature) => {
+        const coordinates = feature.geometry?.coordinates;
+        const properties = feature.properties || {};
+        if (!coordinates || coordinates.length < 2) return null;
+        const [placeLng, placeLat] = coordinates;
+        const name = properties.name || (placeType === 'police' ? 'Police Station' : 'Emergency Hospital');
+        const address = [properties.street, properties.district || properties.suburb, properties.city || properties.county, properties.state]
+          .filter(Boolean)
+          .join(', ') || 'Local Jurisdiction Area';
+        return {
+          id: `osm-${placeType}-${properties.osm_id || `${placeLat}-${placeLng}`}`,
+          name,
+          address,
+          lat: placeLat,
+          lng: placeLng,
+          phone: '',
+          distanceKm: haversineDistanceKm(lat, lng, placeLat, placeLng),
+        };
+      })
+      .filter((candidate): candidate is PlaceResult & { distanceKm: number } => candidate !== null);
+
+    const validCandidates = candidates.filter((candidate) => {
+      const lowerName = candidate.name.toLowerCase();
+      if (placeType === 'police') {
+        return !NON_POLICE_STATION_KEYWORDS.some((keyword) => lowerName.includes(keyword));
+      }
+      return !NON_EMERGENCY_MEDICAL_KEYWORDS.some((keyword) => lowerName.includes(keyword));
+    });
+
+    const top = (validCandidates.length > 0 ? validCandidates : candidates)
       .sort((first, second) => {
-        const firstDistance = haversineDistanceKm(lat, lng, first.geometry!.location!.lat!, first.geometry!.location!.lng!);
-        const secondDistance = haversineDistanceKm(lat, lng, second.geometry!.location!.lat!, second.geometry!.location!.lng!);
+        const firstDistance = first.distanceKm;
+        const secondDistance = second.distanceKm;
         return firstDistance - secondDistance;
       })[0];
 
-    if (!top || top.geometry?.location?.lat == null || top.geometry.location.lng == null) {
-      console.error(`No valid ${placeType} result returned by Google Places`);
+    if (!top) {
+      console.error(`No valid ${placeType} result returned by Photon/OpenStreetMap`);
       return null;
     }
 
-    const placeLat = top.geometry.location.lat;
-    const placeLng = top.geometry.location.lng;
-    const distanceKm = haversineDistanceKm(lat, lng, placeLat, placeLng);
-
-    let phone = '';
-    let address = top.formatted_address || top.vicinity || 'Address unavailable';
-    if (top.place_id) {
-      try {
-        const detailsUrl = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${encodeURIComponent(top.place_id)}&fields=formatted_address,formatted_phone_number&key=${apiKey}`;
-        const detailsResponse = await fetch(detailsUrl, { cache: 'no-store' });
-        const detailsData: { status?: string; result?: { formatted_address?: string; formatted_phone_number?: string } } = await detailsResponse.json();
-        if (detailsData.status === 'OK' && detailsData.result) {
-          address = detailsData.result.formatted_address || address;
-          phone = detailsData.result.formatted_phone_number || '';
-        }
-      } catch (error) {
-        console.error('Place details lookup failed:', error);
-      }
-    }
-
     return {
-      place: {
-        id: top.place_id || `google-${placeType}`,
-        name: top.name || `Nearest ${placeType}`,
-        address,
-        lat: placeLat,
-        lng: placeLng,
-        phone: phone.replace(/[\s()-]/g, '') || '+911000000000',
-      },
-      distanceKm,
+      place: top,
+      distanceKm: top.distanceKm,
     };
   } catch (err) {
-    console.error(`Places API error for ${placeType}:`, err);
+    console.error(`Photon lookup error for ${placeType}:`, err);
     return null;
   }
 }
@@ -376,7 +367,7 @@ export async function GET() {
   return NextResponse.json(
     {
       status: 'ok',
-      service: 'Rakshak SOS Alert Dispatch API (live Places lookup)',
+      service: 'Rakshak SOS Alert Dispatch API (Photon/OpenStreetMap lookup)',
       mode: process.env.TWILIO_ACCOUNT_SID ? 'live' : 'mock',
     },
     { status: 200 }

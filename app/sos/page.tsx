@@ -509,7 +509,14 @@ function SosContent() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm text-neutral-400">{t.marker}</p>
-                  <p className="text-xl font-bold">KM {kmId}</p>
+                  {dispatchResult ? (
+                    <>
+                      <p className="text-xs text-emerald-400 font-bold uppercase tracking-wide mt-1">Nearest Hospital</p>
+                      <p className="text-xl font-bold leading-tight">{dispatchResult.nearestHospital.name}</p>
+                    </>
+                  ) : (
+                    <p className="text-xl font-bold">KM {kmId}</p>
+                  )}
                   {locationLoading && (
                     <div className="flex items-center gap-2 mt-2 text-sm text-neutral-400">
                       <Loader2 className="w-4 h-4 animate-spin" />
