@@ -42,8 +42,6 @@ interface DispatchResult {
   victimCount: AlertPayload['victimCount'];
   nearestHospital: DispatchedUnit;
   nearestPolice: DispatchedUnit;
-  nearbyHospitals: DispatchedUnit[];
-  nearbyPoliceStations: DispatchedUnit[];
   timestamp: string;
 }
 
@@ -222,8 +220,6 @@ export async function POST(request: NextRequest) {
 
     const hospitalResult = facilities.hospital ? facilityToPlace(facilities.hospital, 'hospital') : null;
     const policeResult = facilities.police ? facilityToPlace(facilities.police, 'police') : null;
-    const nearbyHospitals = facilities.hospitalFacilities.map((facility) => facilityToPlace(facility, 'hospital'));
-    const nearbyPoliceStations = facilities.policeFacilities.map((facility) => facilityToPlace(facility, 'police'));
 
     if (!hospitalResult || !policeResult) {
       return NextResponse.json(
@@ -285,30 +281,6 @@ export async function POST(request: NextRequest) {
         call: polCall,
         sms: polSms,
       },
-      nearbyHospitals: nearbyHospitals.map(({ place, distanceKm }) => ({
-        id: place.id,
-        name: place.name,
-        address: place.address,
-        lat: place.lat,
-        lng: place.lng,
-        type: 'hospital',
-        distanceKm: Math.round(distanceKm * 100) / 100,
-        etaMinutes: estimateEtaMinutes(distanceKm),
-        call: { status: 'not_dispatched', mode: 'mock' },
-        sms: { status: 'not_dispatched', mode: 'mock' },
-      })),
-      nearbyPoliceStations: nearbyPoliceStations.map(({ place, distanceKm }) => ({
-        id: place.id,
-        name: place.name,
-        address: place.address,
-        lat: place.lat,
-        lng: place.lng,
-        type: 'police',
-        distanceKm: Math.round(distanceKm * 100) / 100,
-        etaMinutes: estimateEtaMinutes(distanceKm),
-        call: { status: 'not_dispatched', mode: 'mock' },
-        sms: { status: 'not_dispatched', mode: 'mock' },
-      })),
       timestamp: new Date().toISOString(),
     };
 

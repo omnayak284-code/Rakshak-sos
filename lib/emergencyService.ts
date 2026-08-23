@@ -47,7 +47,9 @@ function isEmergencyFacilityName(name: string, type: 'police' | 'hospital' | 'fi
     return ![
       'police hospital', 'railway hospital', 'rehabilitation', 'rehab', 'nursing home',
       'diagnostic', 'pathology', 'laboratory', 'pharmacy', 'clinic', 'dental', 'eye care',
-      'ayurvedic', 'homeopathy', 'physiotherapy', 'blood bank',
+      'ayurvedic', 'ayurveda', 'ayush', 'homeopathy', 'physiotherapy', 'blood bank',
+      'wellness', 'therapy', 'dispensary', 'health centre', 'health center',
+      'swarna', 'diagnostic care',
     ].some((term) => normalizedName.includes(term));
   }
   return true;
@@ -56,8 +58,6 @@ function isEmergencyFacilityName(name: string, type: 'police' | 'hospital' | 'fi
 export async function fetchNearestFacilities(lat: number, lng: number): Promise<{
   police: EmergencyFacility | null;
   hospital: EmergencyFacility | null;
-  policeFacilities: EmergencyFacility[];
-  hospitalFacilities: EmergencyFacility[];
   fireStation: EmergencyFacility | null;
   trafficControl: EmergencyFacility | null;
 }> {
@@ -129,6 +129,15 @@ export async function fetchNearestFacilities(lat: number, lng: number): Promise<
       .join(', ') || 'Nearby emergency facility';
     const name = tags.name || tags['name:en'] || 'Nearby emergency facility';
     if ((type === 'police' || type === 'hospital') && !isEmergencyFacilityName(name, type)) continue;
+    if (type === 'hospital') {
+      const normalizedName = name.toLowerCase();
+      const hasHospitalName = [
+        'hospital', 'medical college', 'medical institute', 'medical center', 'medical centre',
+        'aiims', 'apollo', 'kims', 'capital hospital', 'esi hospital', 'esic hospital',
+        'government hospital',
+      ].some((term) => normalizedName.includes(term));
+      if (!hasHospitalName) continue;
+    }
 
     categories[type].push({
       type,
@@ -144,14 +153,9 @@ export async function fetchNearestFacilities(lat: number, lng: number): Promise<
   const pickNearest = (facilities: EmergencyFacility[]) =>
     facilities.sort((a, b) => a.distanceKm - b.distanceKm)[0] ?? null;
 
-  const sortedPolice = categories.police.sort((a, b) => a.distanceKm - b.distanceKm);
-  const sortedHospitals = categories.hospital.sort((a, b) => a.distanceKm - b.distanceKm);
-
   return {
-    police: pickNearest(sortedPolice),
-    hospital: pickNearest(sortedHospitals),
-    policeFacilities: sortedPolice,
-    hospitalFacilities: sortedHospitals,
+    police: pickNearest(categories.police),
+    hospital: pickNearest(categories.hospital),
     fireStation: pickNearest(categories.fire_station),
     trafficControl: pickNearest(categories.traffic),
   };

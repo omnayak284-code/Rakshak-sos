@@ -128,8 +128,6 @@ interface DispatchResponse {
   victimCount: VictimCount;
   nearestHospital: DispatchedUnit;
   nearestPolice: DispatchedUnit;
-  nearbyHospitals: DispatchedUnit[];
-  nearbyPoliceStations: DispatchedUnit[];
   nearestFire?: DispatchedUnit;
   timestamp: string;
 }
@@ -728,34 +726,6 @@ function PostDispatchConfirmation({
               <p className="text-emerald-100 text-xs mt-1 font-medium">{result.nearestHospital.distanceKm} km away</p>
             </div>
           </div>
-          {result.nearbyPoliceStations.length > 1 && (
-            <div className="rounded-xl border border-emerald-500/30 bg-emerald-700/20 p-3">
-              <p className="text-xs font-bold uppercase tracking-wide text-emerald-200">Other Nearby Police Stations</p>
-              <div className="mt-2 space-y-2">
-                {result.nearbyPoliceStations.slice(1, 5).map((station) => (
-                  <div key={station.id} className="border-t border-emerald-500/20 pt-2 first:border-t-0 first:pt-0 text-xs text-emerald-50">
-                    <p className="font-semibold">{station.name}</p>
-                    <p className="text-emerald-100/80">{station.address}</p>
-                    <p className="text-emerald-100/80 mt-0.5">{station.distanceKm} km away</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-          {result.nearbyHospitals.length > 1 && (
-            <div className="rounded-xl border border-emerald-500/30 bg-emerald-700/20 p-3">
-              <p className="text-xs font-bold uppercase tracking-wide text-emerald-200">Other Nearby Hospitals</p>
-              <div className="mt-2 space-y-2">
-                {result.nearbyHospitals.slice(1, 5).map((hospital) => (
-                  <div key={hospital.id} className="border-t border-emerald-500/20 pt-2 first:border-t-0 first:pt-0 text-xs text-emerald-50">
-                    <p className="font-semibold">{hospital.name}</p>
-                    <p className="text-emerald-100/80">{hospital.address}</p>
-                    <p className="text-emerald-100/80 mt-0.5">{hospital.distanceKm} km away</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
           {result.nearestFire && (
             <div className="flex items-start gap-3 bg-amber-700/30 rounded-xl p-3">
               <span className="text-xl" aria-hidden="true">🚒</span>
