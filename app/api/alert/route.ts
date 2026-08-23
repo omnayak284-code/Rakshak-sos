@@ -1,5 +1,6 @@
 // app/api/alert/route.ts
 import { NextRequest, NextResponse } from 'next/server';
+import { fetchNearestFacilities } from '@/lib/emergencyService';
 
 // ---------- Types ----------
 interface AlertPayload {
@@ -65,98 +66,32 @@ function estimateEtaMinutes(distanceKm: number): number {
   return Math.max(3, Math.round(travelMinutes + 2));
 }
 
-// ---------- Keyless Photon / OpenStreetMap lookup ----------
-const NON_EMERGENCY_MEDICAL_KEYWORDS = [
-  'diagnostic', 'pathology', 'lab', 'laboratory', 'scan', 'imaging', 'x-ray', 'mri',
-  'ultrasound', 'blood bank', 'dental', 'dentist', 'eye care', 'optical', 'optician',
-  'ayurvedic', 'homeo', 'physiotherapy', 'pharmacy', 'chemist', 'skin clinic', 'cosmetic',
-];
-
-const NON_POLICE_STATION_KEYWORDS = [
-  'signal', 'traffic signal', 'traffic booth', 'outpost', 'beat house', 'check post', 'kiosk', 'chowk',
-];
-
-interface PhotonFeature {
-  geometry?: { coordinates?: [number, number] };
-  properties?: {
-    osm_id?: number;
-    name?: string;
-    street?: string;
-    district?: string;
-    suburb?: string;
-    city?: string;
-    county?: string;
-    state?: string;
-  };
-}
-
 async function findNearestPlace(
   lat: number,
   lng: number,
   placeType: 'hospital' | 'police'
 ): Promise<{ place: PlaceResult; distanceKm: number } | null> {
   try {
-    const osmTag = placeType === 'police' ? 'amenity:police' : 'amenity:hospital';
-    const searchQuery = placeType === 'police' ? 'police station thana' : 'hospital trauma care emergency';
-    const url = `https://photon.komoot.io/api/?q=${encodeURIComponent(searchQuery)}&lat=${lat}&lon=${lng}&osm_tag=${encodeURIComponent(osmTag)}&limit=15`;
-    const response = await fetch(url, {
-      headers: { 'User-Agent': 'RakshakSOS-App' },
-      cache: 'no-store',
-    });
-    const data: { features?: PhotonFeature[] } = await response.json();
-    if (!response.ok || !data.features?.length) {
-      console.error(`Photon lookup failed for ${placeType}:`, response.status);
-      return null;
-    }
-
-    const candidates = data.features
-      .map((feature) => {
-        const coordinates = feature.geometry?.coordinates;
-        const properties = feature.properties || {};
-        if (!coordinates || coordinates.length < 2) return null;
-        const [placeLng, placeLat] = coordinates;
-        const name = properties.name || (placeType === 'police' ? 'Police Station' : 'Emergency Hospital');
-        const address = [properties.street, properties.district || properties.suburb, properties.city || properties.county, properties.state]
-          .filter(Boolean)
-          .join(', ') || 'Local Jurisdiction Area';
-        return {
-          id: `osm-${placeType}-${properties.osm_id || `${placeLat}-${placeLng}`}`,
-          name,
-          address,
-          lat: placeLat,
-          lng: placeLng,
-          phone: '',
-          distanceKm: haversineDistanceKm(lat, lng, placeLat, placeLng),
-        };
-      })
-      .filter((candidate): candidate is PlaceResult & { distanceKm: number } => candidate !== null);
-
-    const validCandidates = candidates.filter((candidate) => {
-      const lowerName = candidate.name.toLowerCase();
-      if (placeType === 'police') {
-        return !NON_POLICE_STATION_KEYWORDS.some((keyword) => lowerName.includes(keyword));
-      }
-      return !NON_EMERGENCY_MEDICAL_KEYWORDS.some((keyword) => lowerName.includes(keyword));
-    });
-
-    const top = (validCandidates.length > 0 ? validCandidates : candidates)
-      .sort((first, second) => {
-        const firstDistance = first.distanceKm;
-        const secondDistance = second.distanceKm;
-        return firstDistance - secondDistance;
-      })[0];
-
-    if (!top) {
-      console.error(`No valid ${placeType} result returned by Photon/OpenStreetMap`);
+    const facilities = await fetchNearestFacilities(lat, lng);
+    const facility = placeType === 'police' ? facilities.police : facilities.hospital;
+    if (!facility) {
+      console.error(`No nearby ${placeType} returned within the Overpass search radius`);
       return null;
     }
 
     return {
-      place: top,
-      distanceKm: top.distanceKm,
+      place: {
+        id: `osm-${placeType}-${facility.lat}-${facility.lng}`,
+        name: facility.name,
+        address: facility.address,
+        lat: facility.lat,
+        lng: facility.lng,
+        phone: facility.phone || '+911000000000',
+      },
+      distanceKm: facility.distanceKm,
     };
   } catch (err) {
-    console.error(`Photon lookup error for ${placeType}:`, err);
+    console.error(`Overpass lookup error for ${placeType}:`, err);
     return null;
   }
 }
@@ -367,7 +302,7 @@ export async function GET() {
   return NextResponse.json(
     {
       status: 'ok',
-      service: 'Rakshak SOS Alert Dispatch API (Photon/OpenStreetMap lookup)',
+      service: 'Rakshak SOS Alert Dispatch API (nearby OpenStreetMap lookup)',
       mode: process.env.TWILIO_ACCOUNT_SID ? 'live' : 'mock',
     },
     { status: 200 }

@@ -50,7 +50,6 @@ export async function fetchNearestFacilities(lat: number, lng: number): Promise<
     (
       nwr["amenity"="police"](around:${radiusMeters},${lat},${lng});
       nwr["amenity"="hospital"](around:${radiusMeters},${lat},${lng});
-      nwr["amenity"="clinic"](around:${radiusMeters},${lat},${lng});
       nwr["amenity"="fire_station"](around:${radiusMeters},${lat},${lng});
       node["highway"="services"](around:${radiusMeters},${lat},${lng});
       node["barrier"="toll_booth"](around:${radiusMeters},${lat},${lng});
@@ -58,10 +57,17 @@ export async function fetchNearestFacilities(lat: number, lng: number): Promise<
     out center tags;
   `;
 
-  const response = await fetch(
-    `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(query)}`,
-    { signal: AbortSignal.timeout(15000), cache: 'no-store' }
-  );
+  const response = await fetch('https://overpass-api.de/api/interpreter', {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'User-Agent': 'RakshakSOS-App/1.0',
+    },
+    body: new URLSearchParams({ data: query }),
+    signal: AbortSignal.timeout(15000),
+    cache: 'no-store',
+  });
 
   if (!response.ok) {
     throw new Error(`Overpass request failed with status ${response.status}`);
@@ -84,7 +90,7 @@ export async function fetchNearestFacilities(lat: number, lng: number): Promise<
     const type: EmergencyFacilityType =
       amenity === 'police'
         ? 'police'
-        : amenity === 'hospital' || amenity === 'clinic'
+        : amenity === 'hospital'
           ? 'hospital'
           : amenity === 'fire_station'
             ? 'fire_station'
