@@ -1,6 +1,6 @@
 // app/api/alert/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { fetchNearestFacilities } from '@/lib/emergencyService';
+import { fetchNearestFacilities, type EmergencyFacility } from '@/lib/emergencyService';
 
 // ---------- Types ----------
 interface AlertPayload {
@@ -42,6 +42,8 @@ interface DispatchResult {
   victimCount: AlertPayload['victimCount'];
   nearestHospital: DispatchedUnit;
   nearestPolice: DispatchedUnit;
+  nearbyHospitals: DispatchedUnit[];
+  nearbyPoliceStations: DispatchedUnit[];
   timestamp: string;
 }
 
@@ -66,34 +68,18 @@ function estimateEtaMinutes(distanceKm: number): number {
   return Math.max(3, Math.round(travelMinutes + 2));
 }
 
-async function findNearestPlace(
-  lat: number,
-  lng: number,
-  placeType: 'hospital' | 'police'
-): Promise<{ place: PlaceResult; distanceKm: number } | null> {
-  try {
-    const facilities = await fetchNearestFacilities(lat, lng);
-    const facility = placeType === 'police' ? facilities.police : facilities.hospital;
-    if (!facility) {
-      console.error(`No nearby ${placeType} returned within the Overpass search radius`);
-      return null;
-    }
-
-    return {
-      place: {
-        id: `osm-${placeType}-${facility.lat}-${facility.lng}`,
-        name: facility.name,
-        address: facility.address,
-        lat: facility.lat,
-        lng: facility.lng,
-        phone: facility.phone || '+911000000000',
-      },
-      distanceKm: facility.distanceKm,
-    };
-  } catch (err) {
-    console.error(`Overpass lookup error for ${placeType}:`, err);
-    return null;
-  }
+function facilityToPlace(facility: EmergencyFacility, placeType: 'hospital' | 'police'): { place: PlaceResult; distanceKm: number } {
+  return {
+    place: {
+      id: `osm-${placeType}-${facility.lat}-${facility.lng}`,
+      name: facility.name,
+      address: facility.address,
+      lat: facility.lat,
+      lng: facility.lng,
+      phone: facility.phone || '+911000000000',
+    },
+    distanceKm: facility.distanceKm,
+  };
 }
 
 // ---------- Twilio dispatch (mock-safe) ----------
@@ -223,10 +209,21 @@ export async function POST(request: NextRequest) {
 
     const { km_id, lat, lng, emergencyType, victimCount, bystanderPhone } = validation.payload;
 
-    const [hospitalResult, policeResult] = await Promise.all([
-      findNearestPlace(lat, lng, 'hospital'),
-      findNearestPlace(lat, lng, 'police'),
-    ]);
+    let facilities;
+    try {
+      facilities = await fetchNearestFacilities(lat, lng);
+    } catch (error) {
+      console.error('Nearby facility lookup failed:', error);
+      return NextResponse.json(
+        { success: false, error: 'Nearby facility service is temporarily unavailable. Please call 112 directly.' },
+        { status: 503 }
+      );
+    }
+
+    const hospitalResult = facilities.hospital ? facilityToPlace(facilities.hospital, 'hospital') : null;
+    const policeResult = facilities.police ? facilityToPlace(facilities.police, 'police') : null;
+    const nearbyHospitals = facilities.hospitalFacilities.map((facility) => facilityToPlace(facility, 'hospital'));
+    const nearbyPoliceStations = facilities.policeFacilities.map((facility) => facilityToPlace(facility, 'police'));
 
     if (!hospitalResult || !policeResult) {
       return NextResponse.json(
@@ -288,6 +285,30 @@ export async function POST(request: NextRequest) {
         call: polCall,
         sms: polSms,
       },
+      nearbyHospitals: nearbyHospitals.map(({ place, distanceKm }) => ({
+        id: place.id,
+        name: place.name,
+        address: place.address,
+        lat: place.lat,
+        lng: place.lng,
+        type: 'hospital',
+        distanceKm: Math.round(distanceKm * 100) / 100,
+        etaMinutes: estimateEtaMinutes(distanceKm),
+        call: { status: 'not_dispatched', mode: 'mock' },
+        sms: { status: 'not_dispatched', mode: 'mock' },
+      })),
+      nearbyPoliceStations: nearbyPoliceStations.map(({ place, distanceKm }) => ({
+        id: place.id,
+        name: place.name,
+        address: place.address,
+        lat: place.lat,
+        lng: place.lng,
+        type: 'police',
+        distanceKm: Math.round(distanceKm * 100) / 100,
+        etaMinutes: estimateEtaMinutes(distanceKm),
+        call: { status: 'not_dispatched', mode: 'mock' },
+        sms: { status: 'not_dispatched', mode: 'mock' },
+      })),
       timestamp: new Date().toISOString(),
     };
 
